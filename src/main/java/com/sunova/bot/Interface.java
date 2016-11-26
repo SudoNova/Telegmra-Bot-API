@@ -10,7 +10,9 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.message.BasicNameValuePair;
 import org.telegram.objects.*;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -144,7 +146,7 @@ public class Interface
 		return usingWebHook;
 	}
 	
-	protected void sendMesssage (int updateId, int chatID, String text)
+	protected void sendMesssage (int updateId, int chatID, String text) throws SuspendExecution
 	{
 		updateReposLock.writeLock().lock();
 		updateRepos.remove(updateId);
@@ -152,7 +154,7 @@ public class Interface
 		sendMessage(chatID, text);
 	}
 	
-	protected void sendMessage (int chatID, String text)
+	protected void sendMessage (int chatID, String text) throws SuspendExecution
 	{
 		try
 		{
@@ -174,7 +176,11 @@ public class Interface
 			requestReposLock.writeLock().unlock();
 			sendRequest(reqID, post);
 		}
-		catch (Exception e)
+		catch (IOException e)
+		{
+			e.printStackTrace();
+		}
+		catch (URISyntaxException e)
 		{
 			e.printStackTrace();
 		}

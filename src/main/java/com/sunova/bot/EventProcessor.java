@@ -2,6 +2,8 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
+import com.mongodb.async.client.MongoClient;
+import com.mongodb.async.client.MongoClients;
 import org.telegram.objects.Message;
 import org.telegram.objects.Update;
 import org.telegram.objects.User;
@@ -13,10 +15,12 @@ public class EventProcessor extends Fiber<Void>
 {
 	private Fiber<Void> messageHandler;
 	private Interface botInterface;
-	
+	private MongoClient dbClient;
 	protected EventProcessor (Interface botInterface)
 	{
 		this.botInterface = botInterface;
+		dbClient = MongoClients.create();
+		
 	}
 
 //	protected void processTObject (TObject object) throws SuspendExecution

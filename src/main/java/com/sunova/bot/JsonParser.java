@@ -98,7 +98,7 @@ public class JsonParser
 			}
 			else if (tree.has("message_id"))
 			{
-				System.out.println("message");
+//				System.out.println("message");
 				resultValue = p.getCodec().treeToValue(tree, Message.class);
 			}
 			else if (tree.has("chat"))
@@ -107,7 +107,7 @@ public class JsonParser
 			}
 			else if (tree.has("message_entity"))
 			{
-				System.out.println("Message Entitiy");
+//				System.out.println("Message Entitiy");
 				resultValue = p.getCodec().treeToValue(tree.get("message_entity"), MessageEntity.class);
 			}
 			else if (tree.has("id"))

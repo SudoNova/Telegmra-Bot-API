@@ -1,9 +1,14 @@
 package com.sunova.bot;
 
 import co.paralleluniverse.fibers.Fiber;
+import co.paralleluniverse.fibers.FiberAsync;
 import co.paralleluniverse.fibers.SuspendExecution;
 import com.mongodb.async.client.MongoClient;
 import com.mongodb.async.client.MongoClients;
+import com.mongodb.async.client.MongoCollection;
+import com.mongodb.async.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import org.bson.Document;
 import org.telegram.objects.Message;
 import org.telegram.objects.Update;
 import org.telegram.objects.User;
@@ -15,11 +20,16 @@ public class EventProcessor extends Fiber<Void>
 {
 	private Fiber<Void> messageHandler;
 	private Interface botInterface;
-	private MongoClient dbClient;
+	//	private MongoClient dbClient;
+	private MongoCollection<Document> users;
+	private MongoCollection<Document> channels;
+	
 	protected EventProcessor (Interface botInterface)
 	{
 		this.botInterface = botInterface;
-		dbClient = MongoClients.create();
+		MongoClient dbClient = MongoClients.create();
+		MongoDatabase db = dbClient.getDatabase("tgAdmins");
+		users = db.getCollection("users");
 		
 	}
 
@@ -36,23 +46,55 @@ public class EventProcessor extends Fiber<Void>
 //		}
 //	}
 	
-	protected void processUpdate (Update update) throws SuspendExecution
+	void processUpdate (Update update) throws SuspendExecution
 	{
 		System.out.println("Processor processing update");
 		if (update.containsMessage())
 		{
 			Message message = update.getMessage();
-			User from = message.getFrom();
-			String newMessage = "echo\n" + message.getText();
-			int chat_id = message.getChat().getId();
-			botInterface.sendMesssage(update.getUpdate_id(), chat_id, newMessage);
+			processMessage(update.getUpdate_id(), message);
+			
 		}
 		
 	}
 	
-	private void sendMessage () throws SuspendExecution
+	void processMessage (int updateID, Message message) throws SuspendExecution
 	{
-		//// TODO: 5/11/2016  Method body
+		User from = message.getFrom();
+		String newMessage = "echo\n" + message.getText();
+		try
+		{
+			Document doc = new FiberAsync<Document, Throwable>()
+			{
+				@Override
+				protected void requestAsync ()
+				{
+					users.find(Filters.eq("userID", from.getId())).first((v, t) ->
+					                                                     {
+						                                                     if (t != null)
+						                                                     {
+							                                                     asyncFailed(t);
+						                                                     }
+						                                                     else
+						                                                     {
+							                                                     asyncCompleted(v);
+						                                                     }
+					                                                     }
+					
+					);
+					
+				}
+			}.run();
+			System.out.println(doc == null ? "Null" : doc.toJson());
+		}
+		catch (Throwable throwable)
+		{
+			throwable.printStackTrace();
+		}
+		
+		int chat_id = message.getChat().getId();
+		botInterface.sendMesssage(updateID, chat_id, newMessage);
 	}
+	
 	
 }

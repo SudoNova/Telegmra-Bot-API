@@ -129,12 +129,12 @@ public class WebHook
 										{
 											httpService.handleRequest(connection, context);
 										}
-										catch (IOException e)
+										catch (ConnectionClosedException e)
 										{
-											e.printStackTrace();
+											// Do nothing
 											try
 											{
-												s.close();
+												connection.close();
 											}
 											catch (IOException e2)
 											{
@@ -142,10 +142,20 @@ public class WebHook
 											}
 											break;
 										}
-										catch (Exception e)
+										catch (IOException | HttpException e)
 										{
 											e.printStackTrace();
+											try
+											{
+												connection.close();
+											}
+											catch (IOException e2)
+											{
+												e2.printStackTrace();
+											}
+											break;
 										}
+										
 									}
 								}
 								

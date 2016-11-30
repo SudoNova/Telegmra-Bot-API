@@ -39,7 +39,7 @@ public class Launcher
 	
 	private Launcher () throws SuspendExecution
 	{
-		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
+//		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
 		String certPath = System.getProperty("user.dir") + "\\Cert\\";
 		File certFile = new File(certPath + "cert.pem");
 		try
@@ -147,7 +147,8 @@ public class Launcher
 			System.out.println(privateKey.getFormat());
 			publicKey = pair.getPublic();
 			SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.getEncoded());
-			X509v3CertificateBuilder builder = new X509v3CertificateBuilder(subjectDN, new BigInteger(serialNumber + ""),
+			X509v3CertificateBuilder builder = new X509v3CertificateBuilder(subjectDN,
+			                                                                new BigInteger(serialNumber + ""),
 			                                                                startDate, endDate, subjectDN,
 			                                                                publicKeyInfo);
 			ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").build(privateKey);

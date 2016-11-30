@@ -42,7 +42,7 @@ public class Interface
 	private Fiber<Void> confirmedCleaner;
 	private Fiber<Void> clientResponseChecker;
 	private Fiber<Void> serverResponseChecker;
-	private Fiber<Void> pollingUpdateChecker;
+	private Fiber<Void> updatePuller;
 	private EventProcessor processor;
 	private AtomicInteger updateIndex;
 	private User bot;
@@ -64,79 +64,11 @@ public class Interface
 		nextReqID = new AtomicInteger(0);
 		updateIndex = new AtomicInteger(0);
 		processor = new EventProcessor(this);
-		serverResponseChecker = new Fiber<Void>()
-		{
-			@Override
-			protected Void run () throws InterruptedException, SuspendExecution
-			{
-				while (!shutDown)
-				{
-					sleep(1000);
-					requestWaitingLock.readLock().lock();
-//					System.out.println("lock");
-					Iterator<Map.Entry<Integer, Long>> it = requestWaiting.entrySet().iterator();
-					while (it.hasNext())
-					{
-						Map.Entry<Integer, Long> entry = it.next();
-						int id = entry.getKey();
-						if (System.currentTimeMillis() - entry.getValue() > 1000)
-						{
-//							System.out.println(requestReposLock.getReadLockCount());
-							requestReposLock.readLock().lock();
-							HttpUriRequest request = requestRepos.get(id);
-							requestReposLock.readLock().unlock();
-							Fiber<Void> exec = new Fiber<Void>()
-							{
-								@Override
-								protected Void run () throws InterruptedException, SuspendExecution
-								{
-									transceiver.execute(id, request);
-									return null;
-								}
-							}.start();
-							if (!requestWaitingLock.isWriteLockedByCurrentStrand())
-							{
-								//TODO come back here
-								requestWaitingLock.readLock().unlock();
-//								System.out.println(requestWaitingLock.getReadHoldCount());
-//								System.out.println(requestWaitingLock.getReadLockCount());
-//								System.out.println(requestWaitingLock.isWriteLocked());
-								requestWaitingLock.writeLock().lock();
-//								System.out.println("done");
-								requestWaitingLock.readLock().lock();
-							}
-							requestWaiting.put(id, System.currentTimeMillis());
-						}
-						if (requestWaitingLock.isWriteLockedByCurrentStrand())
-						{
-							requestWaitingLock.writeLock().unlock();
-						}
-					}
-					requestWaitingLock.readLock().unlock();
-//					System.out.println("unlock");
-				}
-				return null;
-			}
-		}.start();
-		pollingUpdateChecker = new Fiber<Void>()
-		{
-			@Override
-			protected Void run () throws InterruptedException, SuspendExecution
-			{
-				do
-				{
-					int updateIndex = Interface.this.updateIndex.get();
-					transceiver.getUpdates(updateIndex);
-					sleep(500);
-				}
-				while (!shutDown);
-				
-				return null;
-			}
-		};
+		serverResponseChecker = new ResponseChecker(transceiver).start();
+		updatePuller = new UpdatePuller(transceiver);
 		if (!isUsingWebhook)
 		{
-			pollingUpdateChecker.start();
+			updatePuller.start();
 		}
 		setUsingWebhook(isUsingWebhook);
 	}
@@ -167,7 +99,6 @@ public class Interface
 			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
 			int reqID = nextReqID.getAndIncrement();
-			System.out.println(requestWaitingLock.getReadLockCount());
 			requestWaitingLock.writeLock().lock();
 			requestWaiting.put(reqID, System.currentTimeMillis());
 			requestWaitingLock.writeLock().unlock();
@@ -176,17 +107,13 @@ public class Interface
 			requestReposLock.writeLock().unlock();
 			sendRequest(reqID, post);
 		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
-		}
-		catch (URISyntaxException e)
+		catch (IOException | URISyntaxException e)
 		{
 			e.printStackTrace();
 		}
 	}
 	
-	protected void sendRequest (int requestID, HttpUriRequest req) throws SuspendExecution
+	private void sendRequest (int requestID, HttpUriRequest req) throws SuspendExecution
 	{
 		System.out.println("Interface sending request to execute");
 		transceiver.execute(requestID, req);
@@ -209,7 +136,7 @@ public class Interface
 		
 	}
 	
-	protected void receiveResult (int requestID, Result resultSet) throws SuspendExecution
+	void receiveResult (int requestID, Result resultSet) throws SuspendExecution
 	{
 		for (TObject i : resultSet.getResult())
 		{
@@ -235,19 +162,104 @@ public class Interface
 		}
 	}
 	
-	protected void setUsingWebhook (boolean isUsingWebhook)
+	void setUsingWebhook (boolean isUsingWebhook)
 	{
 		if (!isUsingWebhook)
 		{
-			pollingUpdateChecker.start();
+			updatePuller.start();
 		}
 		else
 		{
-			pollingUpdateChecker.interrupt();
+			updatePuller.interrupt();
 		}
 		usingWebHook = isUsingWebhook;
 	}
 	
+	private class ResponseChecker extends Fiber<Void>
+	{
+		private final Transceiver transceiver;
+		
+		public ResponseChecker (Transceiver transceiver)
+		{
+			this.transceiver = transceiver;
+		}
+		
+		@Override
+		protected Void run () throws InterruptedException, SuspendExecution
+		{
+			while (!shutDown)
+			{
+				sleep(1000);
+				requestWaitingLock.readLock().lock();
+//					System.out.println("lock");
+				Iterator<Map.Entry<Integer, Long>> it = requestWaiting.entrySet().iterator();
+				while (it.hasNext())
+				{
+					Map.Entry<Integer, Long> entry = it.next();
+					int id = entry.getKey();
+					if (System.currentTimeMillis() - entry.getValue() > 1000)
+					{
+//							System.out.println(requestReposLock.getReadLockCount());
+						requestReposLock.readLock().lock();
+						HttpUriRequest request = requestRepos.get(id);
+						requestReposLock.readLock().unlock();
+						Fiber<Void> exec = new Fiber<Void>()
+						{
+							@Override
+							protected Void run () throws InterruptedException, SuspendExecution
+							{
+								transceiver.execute(id, request);
+								return null;
+							}
+						}.start();
+						if (!requestWaitingLock.isWriteLockedByCurrentStrand())
+						{
+							//TODO come back here
+							requestWaitingLock.readLock().unlock();
+//								System.out.println(requestWaitingLock.getReadHoldCount());
+//								System.out.println(requestWaitingLock.getReadLockCount());
+//								System.out.println(requestWaitingLock.isWriteLocked());
+							requestWaitingLock.writeLock().lock();
+//								System.out.println("done");
+							requestWaitingLock.readLock().lock();
+						}
+						requestWaiting.put(id, System.currentTimeMillis());
+					}
+					if (requestWaitingLock.isWriteLockedByCurrentStrand())
+					{
+						requestWaitingLock.writeLock().unlock();
+					}
+				}
+				requestWaitingLock.readLock().unlock();
+//					System.out.println("unlock");
+			}
+			return null;
+		}
+	}
+	
+	private class UpdatePuller extends Fiber<Void>
+	{
+		private final Transceiver transceiver;
+		
+		public UpdatePuller (Transceiver transceiver)
+		{
+			this.transceiver = transceiver;
+		}
+		
+		@Override
+		protected Void run () throws InterruptedException, SuspendExecution
+		{
+			do
+			{
+				int updateIndex = Interface.this.updateIndex.get();
+				transceiver.getUpdates(updateIndex);
+				sleep(500);
+			}
+			while (!shutDown);
+			
+			return null;
+		}
+	}
 }
 
 

@@ -23,6 +23,7 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.Scanner;
 
 /**
@@ -31,17 +32,27 @@ import java.util.Scanner;
 public class WebHook
 {
 	protected static final int serverPort = 8443;
-	private HttpRequestHandler handler;
+	private static ArrayList<WebHook> repos;
+	
+	static
+	{
+		repos = new ArrayList<>(5);
+	}
+	
+	private Launcher launcher;
 	private ServerSocket serverSocket;
 	private Thread connectionAcceptor;
 	private boolean shutDown;
+	private Transceiver transceiver;
 	
-	protected WebHook (String token, Transceiver transceiver)
+	private WebHook (Launcher launcher)
 	{
 		try
 		{
+			this.launcher = launcher;
+			transceiver = Transceiver.getInstance(launcher);
 			SSLContext context = SSLContext.getInstance("TLSv1.2");
-			Scanner reader = new Scanner(Launcher.getCertificate());
+			Scanner reader = new Scanner(launcher.getCertificate());
 			StringBuilder bd = new StringBuilder();
 			while (reader.hasNextLine())
 			{
@@ -56,8 +67,8 @@ public class WebHook
 			X509CertificateHolder holder = new X509CertificateHolder(Base64.decode(buffer));
 			X509Certificate cert = new JcaX509CertificateConverter().getCertificate(holder);
 			
-			FileInputStream stream = new FileInputStream(Launcher.getPrivateKey());
-			buffer = new byte[(int) Launcher.getPrivateKey().length()];
+			FileInputStream stream = new FileInputStream(launcher.getPrivateKey());
+			buffer = new byte[(int) launcher.getPrivateKey().length()];
 			stream.read(buffer);
 			stream.close();
 			PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(Base64.decode(buffer));
@@ -79,7 +90,7 @@ public class WebHook
 			HttpProcessor processor = HttpProcessorBuilder.create().add(responseConnControl).add(responseContent).add
 					(responseServer).build();
 			UriHttpRequestHandlerMapper registry = new UriHttpRequestHandlerMapper();
-			registry.register("*" + token + "/", new HttpRequestHandler()
+			registry.register("*" + launcher.token + "/", new HttpRequestHandler()
 			{
 				@Override
 				@Suspendable
@@ -183,6 +194,16 @@ public class WebHook
 			e.printStackTrace();
 		}
 		
+	}
+	
+	static WebHook getInstance (Launcher launcher)
+	{
+		int serial = launcher.serialNumber;
+		if (repos.size() <= serial || repos.get(serial) == null)
+		{
+			repos.add(launcher.serialNumber, new WebHook(launcher));
+		}
+		return repos.get(serial);
 	}
 	
 	private class Handler implements HttpRequestHandler

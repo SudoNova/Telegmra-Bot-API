@@ -14,11 +14,12 @@ import java.io.IOException;
  */
 public class JsonParser
 {
+	private static JsonParser instance;
 	private ObjectReader updateReader;
 	private ObjectReader resultReader;
 	private ObjectWriter writer;
 	
-	public JsonParser ()
+	private JsonParser ()
 	{
 		ObjectMapper mapper = new ObjectMapper();
 		SimpleModule module = new SimpleModule();
@@ -29,6 +30,15 @@ public class JsonParser
 		resultReader = mapper.readerFor(Result.class);
 		updateReader = mapper.readerFor(Update.class);
 		writer = mapper.writerFor(TObject.class);
+	}
+	
+	public static JsonParser getInstance ()
+	{
+		if (instance == null)
+		{
+			instance = new JsonParser();
+		}
+		return instance;
 	}
 	
 	public Result parseResult (byte[] input)
@@ -65,23 +75,6 @@ public class JsonParser
 		}
 		return null;
 	}
-
-//	public Result parse (InputStream stream)
-//	{
-//		try
-//		{
-//			{
-//				Result results = reader.readValue(stream);
-//				return checkResponse(results);
-//			}
-//		}
-//		catch (IOException e)
-//		{
-//			e.printStackTrace();
-//		}
-//		return null;
-//	}
-//
 	
 	private static class TObjectDeserializer extends JsonDeserializer<TObject>
 	{

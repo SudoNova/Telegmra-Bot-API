@@ -1,9 +1,9 @@
 package com.sunova.bot;
 
+
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.httpclient.FiberHttpClientBuilder;
-import co.paralleluniverse.strands.Strand;
 import org.apache.http.*;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -20,6 +20,7 @@ import org.telegram.objects.Update;
 import org.telegram.objects.User;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 /**
  * Created by HellScre4m on 4/20/2016.
@@ -27,89 +28,64 @@ import java.io.IOException;
 public class Transceiver
 {
 	private static String path = "https://api.telegram.org/bot<token>/";
-	private CloseableHttpClient client;
+	private static CloseableHttpClient client;
+	private static ArrayList<Transceiver> repos;
+	
+	static
+	{
+		repos = new ArrayList<>(5);
+	}
+	
+	Interface botInterface;
+	User bot;
+	private Launcher launcher;
 	private boolean shutdown = false;
 	private JsonParser parser;
-	private Interface botInterface;
-	private WebHook webHook;
-	private boolean isUsingWebhook;
-	private User bot;
 	
-	public Transceiver (String token) throws SuspendExecution
+	private Transceiver (Launcher launcher)
 	{
-		path = path.replace("<token>", token);
-		parser = new JsonParser();
-		client = FiberHttpClientBuilder.create().build();
-		String getIDQuery = path + "getMe";
-		final HttpGet req = new HttpGet(getIDQuery);
-		webHook = new WebHook(token, Transceiver.this);
-		Fiber<Void> init = new Fiber<Void>()
+		this.launcher = launcher;
+		path = path.replace("<token>", launcher.token);
+		parser = JsonParser.getInstance();
+		if (client == null)
 		{
-			protected Void run () throws SuspendExecution, InterruptedException
-			{
-				
-				int i = 3;
-				CloseableHttpResponse response;
-				HttpPost webHookInitRequest = null;
-				FileBody fb = new FileBody(Launcher.getCertificate());
-				try
-				{
-					response = client.execute(req);
-					byte[] byteValue = getResponseByteArray(response);
-					bot = (User) parser.parseResult(byteValue).getResult()[0];
-					webHookInitRequest = new HttpPost(path + "setWebhook");
-					StringBody sb = new StringBody("https://" + Launcher.IPAddress + ":" + WebHook.serverPort + "/" + token +
-							                               "/",
-					                               ContentType
-							                               .TEXT_PLAIN);
-					HttpEntity entity = MultipartEntityBuilder.create().addPart("certificate", fb).addPart("url", sb).build();
-					webHookInitRequest.setEntity(entity);
-				}
-				catch (IOException e)
-				{
-					e.printStackTrace();
-					System.exit(-1);
-				}
-				while (i-- > 0)
-				{
-					try
-					{
-						response = client.execute(webHookInitRequest);
-						if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
-						{
-							System.err.println(EntityUtils.toString(response.getEntity()));
-							response.close();
-							Fiber.sleep(1000);
-							continue;
-						}
-						System.out.println(EntityUtils.toString(response.getEntity()));
-						isUsingWebhook = true;
-						response.close();
-						break;
-					}
-					catch (IOException e)
-					{
-						e.printStackTrace();
-						continue;
-					}
-				}
-				return null;
-			}
-		}.start();
-		try
-		{
-			Strand.join(init);
+			client = FiberHttpClientBuilder.create().build();
 		}
-		catch (Exception e)
+		
+	}
+	
+	static Transceiver getInstance (Launcher launcher)
+	{
+		int serial = launcher.serialNumber;
+		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			e.printStackTrace();
+			repos.add(serial, new Transceiver(launcher));
 		}
-		botInterface = new Interface(this, bot, isUsingWebhook);
+		
+		return repos.get(serial);
 	}
 	
 	public static String getPath ()
 	{
 		return path;
+	}
+	
+	void init () throws SuspendExecution
+	{
+		String getIDQuery = path + "getMe";
+		final HttpGet req = new HttpGet(getIDQuery);
+		
+		try
+		{
+			HttpResponse response = client.execute(req);
+			byte[] byteValue = getResponseByteArray(response);
+			bot = (User) parser.parseResult(byteValue).getResult()[0];
+		}
+		catch (IOException e)
+		{
+			e.printStackTrace();
+			System.exit(-1);
+		}
 	}
 	
 	private byte[] getResponseByteArray (HttpResponse response)
@@ -175,7 +151,7 @@ public class Transceiver
 		{
 			protected Void run () throws InterruptedException, SuspendExecution
 			{
-				System.out.println("Transceiver sendig update to Interface");
+//				System.out.println("Transceiver sendig update to Interface");
 				botInterface.processUpdate(result);
 				return null;
 			}
@@ -201,7 +177,7 @@ public class Transceiver
 	
 	protected void execute (int requestID, HttpUriRequest request) throws SuspendExecution
 	{
-		System.out.println("Transceiver executing request");
+//		System.out.println("Transceiver executing request");
 		try
 		{
 			HttpResponse response = client.execute(request);
@@ -214,5 +190,68 @@ public class Transceiver
 		}
 	}
 	
+	boolean disableWebhook () throws SuspendExecution, InterruptedException
+	{
+		return disableWebhook(1);
+	}
+	
+	boolean disableWebhook (int tryCount) throws SuspendExecution, InterruptedException
+	{
+		boolean success = enableWebhook(null, tryCount);
+		if (success)
+		{
+			botInterface.setUsingWebhook(false);
+		}
+		return success;
+	}
+	
+	boolean enableWebhook (String webhookURL) throws SuspendExecution, InterruptedException
+	{
+		return enableWebhook(webhookURL, 1);
+	}
+	
+	boolean enableWebhook (String webhookURL, int tryCount) throws SuspendExecution, InterruptedException
+	{
+		boolean success = false;
+		int i = 3;
+		CloseableHttpResponse response;
+		HttpPost webHookInitRequest = null;
+		webHookInitRequest = new HttpPost(path + "setWebhook");
+		StringBody sb = new StringBody(webhookURL,
+		                               ContentType
+				                               .TEXT_PLAIN);
+		MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create().addPart("url", sb);
+		if (webhookURL != null)
+		{
+			FileBody fb = new FileBody(launcher.getCertificate());
+			entityBuilder.addPart("certificate", fb);
+		}
+		HttpEntity entity = entityBuilder.build();
+		webHookInitRequest.setEntity(entity);
+		while (i-- > 0)
+		{
+			try
+			{
+				response = client.execute(webHookInitRequest);
+				if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
+				{
+					System.err.println(EntityUtils.toString(response.getEntity()));
+					response.close();
+					Fiber.sleep(1000);
+					continue;
+				}
+				System.out.println(EntityUtils.toString(response.getEntity()));
+				botInterface
+						.setUsingWebhook(success = true);
+				response.close();
+				break;
+			}
+			catch (IOException e)
+			{
+				e.printStackTrace();
+			}
+		}
+		return success;
+	}
 }
 

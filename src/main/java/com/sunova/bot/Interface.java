@@ -21,6 +21,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Interface
 {
+	private static ArrayList<Interface> repos;
+	
+	static
+	{
+		repos = new ArrayList<>(5);
+	}
+	
+	User bot;
+	Transceiver transceiver;
 	/**
 	 * Repository for incoming updates
 	 */
@@ -45,14 +54,9 @@ public class Interface
 	private Fiber<Void> updatePuller;
 	private EventProcessor processor;
 	private AtomicInteger updateIndex;
-	private User bot;
-	private Transceiver transceiver;
 	
-	protected Interface (Transceiver transceiver, User bot, boolean isUsingWebhook)
+	private Interface ()
 	{
-		this.transceiver = transceiver;
-		this.bot = bot;
-		
 		updateRepos = new HashMap<>();
 		requestRepos = new HashMap<>();
 		requestWaiting = new HashMap<>();
@@ -64,13 +68,25 @@ public class Interface
 		nextReqID = new AtomicInteger(0);
 		updateIndex = new AtomicInteger(0);
 		processor = new EventProcessor(this);
-		serverResponseChecker = new ResponseChecker(transceiver).start();
+		
+		serverResponseChecker = new ResponseChecker(transceiver);
 		updatePuller = new UpdatePuller(transceiver);
-		if (!isUsingWebhook)
+	}
+	
+	static Interface getInstance (Launcher launcher)
+	{
+		int serial = launcher.serialNumber;
+		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			updatePuller.start();
+			repos.add(serial, new Interface());
 		}
-		setUsingWebhook(isUsingWebhook);
+		return repos.get(serial);
+	}
+	
+	void start ()
+	{
+		updatePuller.start();
+		serverResponseChecker.start();
 	}
 	
 	public boolean isUsingWebHook ()
@@ -115,13 +131,13 @@ public class Interface
 	
 	private void sendRequest (int requestID, HttpUriRequest req) throws SuspendExecution
 	{
-		System.out.println("Interface sending request to execute");
+//		System.out.println("Interface sending request to execute");
 		transceiver.execute(requestID, req);
 	}
 	
 	protected void processUpdate (Update update) throws SuspendExecution
 	{
-		System.out.println("Interface processing update");
+//		System.out.println("Interface processing update");
 		int updateID = update.getUpdate_id();
 //		System.out.println(updateWaitingLock.getReadLockCount());
 		updateReposLock.writeLock().lock();
@@ -164,14 +180,6 @@ public class Interface
 	
 	void setUsingWebhook (boolean isUsingWebhook)
 	{
-		if (!isUsingWebhook)
-		{
-			updatePuller.start();
-		}
-		else
-		{
-			updatePuller.interrupt();
-		}
 		usingWebHook = isUsingWebhook;
 	}
 	
@@ -249,14 +257,16 @@ public class Interface
 		@Override
 		protected Void run () throws InterruptedException, SuspendExecution
 		{
-			do
+			while (!shutDown)
 			{
+				sleep(500);
+				if (isUsingWebHook())
+				{
+					continue;
+				}
 				int updateIndex = Interface.this.updateIndex.get();
 				transceiver.getUpdates(updateIndex);
-				sleep(500);
 			}
-			while (!shutDown);
-			
 			return null;
 		}
 	}

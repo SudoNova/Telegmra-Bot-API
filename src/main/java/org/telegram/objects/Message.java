@@ -13,11 +13,21 @@ public class Message implements TObject
 	private int forward_date;
 	private Message reply_to_message;
 	private String text;
+	private MessageEntity[] entities;
+	
+	public MessageEntity[] getEntities ()
+	{
+		return entities;
+	}
+	
+	public void setEntities (MessageEntity[] entities)
+	{
+		this.entities = entities;
+	}
 
 //	private
 // TODO Add other fields.
 	//TODO this class needs to be completed.
-	
 	
 	public Chat getChat ()
 	{

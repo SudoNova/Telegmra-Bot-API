@@ -21,6 +21,7 @@ import org.telegram.objects.User;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Created by HellScre4m on 4/20/2016.
@@ -30,14 +31,17 @@ public class Transceiver
 	private static String path = "https://api.telegram.org/bot<token>/";
 	private static CloseableHttpClient client;
 	private static ArrayList<Transceiver> repos;
-	
+
 	static
 	{
 		repos = new ArrayList<>(5);
 	}
 	
+	AtomicInteger updateIndex;
 	Interface botInterface;
 	User bot;
+	private boolean shutDown;
+	private UpdatePuller updatePuller;
 	private Launcher launcher;
 	private boolean shutdown = false;
 	private JsonParser parser;
@@ -51,7 +55,8 @@ public class Transceiver
 		{
 			client = FiberHttpClientBuilder.create().build();
 		}
-		
+		updatePuller = new UpdatePuller();
+		updateIndex = new AtomicInteger(0);
 	}
 	
 	static Transceiver getInstance (Launcher launcher)
@@ -101,19 +106,11 @@ public class Transceiver
 		}
 	}
 	
-	protected Result getResult (int requestID, HttpResponse response) throws SuspendExecution
+	protected Result getResult (HttpResponse response)
 	{
 		Result result = null;
-		try
-		{
-			byte[] byteValue = EntityUtils.toByteArray(response.getEntity());
-//			System.out.println(new String(byteValue));
-			result = parser.parseResult(byteValue);
-		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
-		}
+		byte[] byteValue = getResponseByteArray(response);
+		result = parser.parseResult(byteValue);
 		return result;
 	}
 	
@@ -147,16 +144,7 @@ public class Transceiver
 	{
 		
 		Update result = parseUpdate(request);
-		Fiber<Void> fiber = new Fiber<Void>()
-		{
-			protected Void run () throws InterruptedException, SuspendExecution
-			{
-//				System.out.println("Transceiver sendig update to Interface");
-				botInterface.processUpdate(result);
-				return null;
-			}
-			
-		}.start();
+		botInterface.processUpdate(result);
 		
 	}
 	
@@ -166,8 +154,8 @@ public class Transceiver
 				updateIndex));
 		try
 		{
-			Update update = parseUpdate(client.execute(req));
-			botInterface.processUpdate(update);
+			Result result = getResult(client.execute(req));
+			botInterface.processUpdates(result);
 		}
 		catch (IOException e)
 		{
@@ -181,10 +169,11 @@ public class Transceiver
 		try
 		{
 			HttpResponse response = client.execute(request);
-			Result result = getResult(requestID, response);
+			Result result = getResult(response);
 			botInterface.receiveResult(requestID, result);
 		}
-		catch (IOException e)
+//		catch (IOException e)
+		catch (Exception e)
 		{
 			e.printStackTrace();
 		}
@@ -197,12 +186,7 @@ public class Transceiver
 	
 	boolean disableWebhook (int tryCount) throws SuspendExecution, InterruptedException
 	{
-		boolean success = enableWebhook(null, tryCount);
-		if (success)
-		{
-			botInterface.setUsingWebhook(false);
-		}
-		return success;
+		return enableWebhook(null, tryCount);
 	}
 	
 	boolean enableWebhook (String webhookURL) throws SuspendExecution, InterruptedException
@@ -217,15 +201,21 @@ public class Transceiver
 		CloseableHttpResponse response;
 		HttpPost webHookInitRequest = null;
 		webHookInitRequest = new HttpPost(path + "setWebhook");
-		StringBody sb = new StringBody(webhookURL,
-		                               ContentType
-				                               .TEXT_PLAIN);
-		MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create().addPart("url", sb);
+		MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create();
 		if (webhookURL != null)
 		{
 			FileBody fb = new FileBody(launcher.getCertificate());
 			entityBuilder.addPart("certificate", fb);
+			
 		}
+		else
+		{
+			webhookURL = "";
+		}
+		StringBody sb = new StringBody(webhookURL,
+		                               ContentType
+				                               .TEXT_PLAIN);
+		entityBuilder.addPart("url", sb);
 		HttpEntity entity = entityBuilder.build();
 		webHookInitRequest.setEntity(entity);
 		while (i-- > 0)
@@ -241,8 +231,24 @@ public class Transceiver
 					continue;
 				}
 				System.out.println(EntityUtils.toString(response.getEntity()));
-				botInterface
-						.setUsingWebhook(success = true);
+				success = true;
+				if (webhookURL.equals(""))
+				{
+					if (updatePuller.isInterrupted())
+					{
+						updatePuller.unpark();
+					}
+					else if (!updatePuller.isAlive())
+					{
+						updatePuller.start();
+					}
+				}
+				else if (!updatePuller.isInterrupted() && updatePuller.isAlive())
+				{
+					updatePuller.interrupt();
+				}
+				
+				
 				response.close();
 				break;
 			}
@@ -252,6 +258,21 @@ public class Transceiver
 			}
 		}
 		return success;
+	}
+	
+	private class UpdatePuller extends Fiber<Void>
+	{
+		@Override
+		protected Void run () throws InterruptedException, SuspendExecution
+		{
+			while (!shutDown)
+			{
+				sleep(750);
+				int updateIndex = Transceiver.this.updateIndex.get();
+				getUpdates(updateIndex);
+			}
+			return null;
+		}
 	}
 }
 

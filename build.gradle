@@ -49,10 +49,10 @@ dependencies {
 tasks.withType(JavaExec)
         {
             jvmArgs "-javaagent:${configurations.quasar.iterator().next()}"
-
         }
 task run(type: JavaExec) {
 
+    standardInput = System.in
     main = 'com.sunova.bot.Launcher'
     classpath = sourceSets.main.runtimeClasspath
 }

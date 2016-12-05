@@ -45,23 +45,19 @@ public class EventProcessor extends Fiber<Void>
 			{
 				dbDriver.insertUser(from);
 			}
-			else
-			{
-				System.out.println(doc.toJson());
-			}
+//			else
+//			{
+//				System.out.println(doc.toJson());
+//			}
 		}
 		
 		catch (Throwable throwable)
 		{
-			if (!(throwable instanceof NullPointerException))
-			{
-				throwable.printStackTrace();
-			}
+			throwable.printStackTrace();
 		}
 		
 		int chat_id = message.getChat().getId();
 		botInterface.sendMesssage(updateID, chat_id, newMessage);
 	}
-	
 	
 }

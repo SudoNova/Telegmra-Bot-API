@@ -110,7 +110,6 @@ public class WebHook
 						System.out.println("Error recieving webhook");
 						response.setStatusCode(HttpStatus.SC_UNAUTHORIZED);
 					}
-					//TODO add code here
 				}
 			});
 			HttpService httpService = new HttpService(processor, registry);

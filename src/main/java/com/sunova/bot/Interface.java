@@ -43,17 +43,12 @@ public class Interface
 	 */
 	private HashMap<Integer, Long> requestWaiting;
 	private boolean shutDown;
-	private boolean usingWebHook;
 	private ReentrantReadWriteLock requestWaitingLock;
 	private ReentrantReadWriteLock updateReposLock;
 	private ReentrantReadWriteLock requestReposLock;
 	private AtomicInteger nextReqID;
-	private Fiber<Void> confirmedCleaner;
-	private Fiber<Void> clientResponseChecker;
 	private Fiber<Void> serverResponseChecker;
-	private Fiber<Void> updatePuller;
 	private EventProcessor processor;
-	private AtomicInteger updateIndex;
 	
 	private Interface ()
 	{
@@ -66,11 +61,9 @@ public class Interface
 		requestWaitingLock = new ReentrantReadWriteLock();
 		
 		nextReqID = new AtomicInteger(0);
-		updateIndex = new AtomicInteger(0);
 		processor = new EventProcessor(this);
 		
-		serverResponseChecker = new ResponseChecker(transceiver);
-		updatePuller = new UpdatePuller(transceiver);
+		serverResponseChecker = new ResponseChecker(transceiver).start();
 	}
 	
 	static Interface getInstance (Launcher launcher)
@@ -81,17 +74,6 @@ public class Interface
 			repos.add(serial, new Interface());
 		}
 		return repos.get(serial);
-	}
-	
-	void start ()
-	{
-		updatePuller.start();
-		serverResponseChecker.start();
-	}
-	
-	public boolean isUsingWebHook ()
-	{
-		return usingWebHook;
 	}
 	
 	protected void sendMesssage (int updateId, int chatID, String text) throws SuspendExecution
@@ -135,24 +117,37 @@ public class Interface
 		transceiver.execute(requestID, req);
 	}
 	
-	protected void processUpdate (Update update) throws SuspendExecution
+	protected void processUpdate (Update update)
 	{
-//		System.out.println("Interface processing update");
 		int updateID = update.getUpdate_id();
-//		System.out.println(updateWaitingLock.getReadLockCount());
-		updateReposLock.writeLock().lock();
-//		System.out.println("Update repos write lock acquired");
-		updateRepos.put(updateID, update);
-		updateReposLock.writeLock().unlock();
-		processor.processUpdate(update);
-		updateIndex.compareAndSet(updateID, updateID + 1);
-		int index = updateIndex.get();
+		int index = transceiver.updateIndex.get();
 		int currentIndex = Math.max(index, updateID + 1);
-		updateIndex.compareAndSet(index, currentIndex);
+		transceiver.updateIndex.compareAndSet(index, currentIndex);
+		new Fiber<Void>()
+		{
+			@Override
+			protected Void run () throws InterruptedException, SuspendExecution
+			{
+				updateReposLock.writeLock().lock();
+				updateRepos.put(updateID, update);
+				updateReposLock.writeLock().unlock();
+				processor.processUpdate(update);
+				return null;
+			}
+		}.start();
 		
 	}
 	
-	void receiveResult (int requestID, Result resultSet) throws SuspendExecution
+	protected void processUpdates (Result result)
+	{
+		TObject[] results = result.getResult();
+		for (TObject i : results)
+		{
+			processUpdate((Update) i);
+		}
+	}
+	
+	void receiveResult (int requestID, Result resultSet)
 	{
 		for (TObject i : resultSet.getResult())
 		{
@@ -162,6 +157,7 @@ public class Interface
 				Update update = (Update) object;
 				processUpdate(update);
 			}
+			
 			else if (object instanceof Message)
 			{
 				Message message = (Message) object;
@@ -175,13 +171,10 @@ public class Interface
 					requestReposLock.writeLock().unlock();
 				}
 			}
+			
 		}
 	}
 	
-	void setUsingWebhook (boolean isUsingWebhook)
-	{
-		usingWebHook = isUsingWebhook;
-	}
 	
 	private class ResponseChecker extends Fiber<Void>
 	{
@@ -199,7 +192,6 @@ public class Interface
 			{
 				sleep(1000);
 				requestWaitingLock.readLock().lock();
-//					System.out.println("lock");
 				Iterator<Map.Entry<Integer, Long>> it = requestWaiting.entrySet().iterator();
 				while (it.hasNext())
 				{
@@ -207,7 +199,6 @@ public class Interface
 					int id = entry.getKey();
 					if (System.currentTimeMillis() - entry.getValue() > 1000)
 					{
-//							System.out.println(requestReposLock.getReadLockCount());
 						requestReposLock.readLock().lock();
 						HttpUriRequest request = requestRepos.get(id);
 						requestReposLock.readLock().unlock();
@@ -222,13 +213,8 @@ public class Interface
 						}.start();
 						if (!requestWaitingLock.isWriteLockedByCurrentStrand())
 						{
-							//TODO come back here
 							requestWaitingLock.readLock().unlock();
-//								System.out.println(requestWaitingLock.getReadHoldCount());
-//								System.out.println(requestWaitingLock.getReadLockCount());
-//								System.out.println(requestWaitingLock.isWriteLocked());
 							requestWaitingLock.writeLock().lock();
-//								System.out.println("done");
 							requestWaitingLock.readLock().lock();
 						}
 						requestWaiting.put(id, System.currentTimeMillis());
@@ -239,33 +225,6 @@ public class Interface
 					}
 				}
 				requestWaitingLock.readLock().unlock();
-//					System.out.println("unlock");
-			}
-			return null;
-		}
-	}
-	
-	private class UpdatePuller extends Fiber<Void>
-	{
-		private final Transceiver transceiver;
-		
-		public UpdatePuller (Transceiver transceiver)
-		{
-			this.transceiver = transceiver;
-		}
-		
-		@Override
-		protected Void run () throws InterruptedException, SuspendExecution
-		{
-			while (!shutDown)
-			{
-				sleep(500);
-				if (isUsingWebHook())
-				{
-					continue;
-				}
-				int updateIndex = Interface.this.updateIndex.get();
-				transceiver.getUpdates(updateIndex);
 			}
 			return null;
 		}

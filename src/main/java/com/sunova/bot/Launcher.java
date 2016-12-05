@@ -16,6 +16,8 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
@@ -30,12 +32,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Launcher
 {
+	static InputStream in;
 	//	protected static String domainAddress = "188.211.199.38";
 	private static AtomicInteger serialNumberTracker;
 	private static ArrayList<Launcher> launcherRepos;
 	
 	static
 	{
+		in = System.in;
 		serialNumberTracker = new AtomicInteger(0);
 		launcherRepos = new ArrayList<>(5);
 	}
@@ -43,6 +47,7 @@ public class Launcher
 	String domainAddress;
 	String token;
 	int serialNumber;
+	boolean shutDown;
 	private String certPath;
 	private File publicKey;
 	private File privateKey;
@@ -51,6 +56,7 @@ public class Launcher
 	private Interface botInterface;
 	private WebHook webHook;
 	private Transceiver transceiver;
+	private ServantFiber requestHandler;
 	
 	private Launcher ()
 	{
@@ -70,11 +76,12 @@ public class Launcher
 		return launcher;
 	}
 	
-	public static void main (String[] args) throws SuspendExecution
+	public static void main (String[] args) throws SuspendExecution, IOException
 	{
+		System.setProperty("Dco.paralleluniverse.fibers.verifyInstrumentation", "true");
 		Launcher instance = createInstance();
 		String certPath = System.getProperty("user.dir") + "\\Cert\\";
-		String token = "211948704:AAGkZOzNDrzhNUApb8i8n8c6gx73F2R1prc";
+		String token = "325007578:AAGtjbSwiMBG0YprvX2zbaXnl10fALoWBkw";
 		String domainAddress = "sunova.dynu.com";
 		instance.setBotToken(token).setCertPath(certPath).setDomainAddress(domainAddress).build();
 		
@@ -172,38 +179,40 @@ public class Launcher
 		transceiver = Transceiver.getInstance(this);
 		webHook = WebHook.getInstance(this);
 		botInterface = Interface.getInstance(this);
-		Fiber fiber = new Fiber(() ->
-		                        {
-			                        //@formatter:off
-			                        transceiver.botInterface = botInterface;
-			                        transceiver.init();
-			                        botInterface.transceiver = transceiver;
-			                        botInterface.bot = transceiver.bot;
-			                        webhookURL = "https://" + domainAddress + ":" + WebHook.serverPort +
-					                        "/" +
-					                        token +
-					                        "/";
-			                        try
-			                        {
-				                        transceiver.enableWebhook(webhookURL);
-				                        botInterface.start();
-				                        System.out.println("haha");
-			                        }
-			                        catch (SuspendExecution | InterruptedException e)
-			                        {
-				                        e.printStackTrace();
-			                        }
-			
-		                        }
-		).start();
-//		try
-//		{
-//			Strand.join(fiber);
-//		}
-//		catch (Exception e)
-//		{
-//			e.printStackTrace();
-//		}
+		requestHandler = new ServantFiber();
+		requestHandler.option = requestHandler.INIT;
+		requestHandler.start();
+		maintenance();
+	}
+	
+	private void maintenance ()
+	{
+		Scanner in = new Scanner(System.in);
+		while (in.hasNextLine())
+		{
+			String choice = in.nextLine().toLowerCase();
+			if (choice.matches("disable\\s+webhook"))
+			{
+				System.out.println("1");
+				requestHandler.option = requestHandler.DISABLE_WEBHOOK;
+			}
+			else if (choice.matches("enable\\s+webhook"))
+			{
+				System.out.println("2");
+				requestHandler.option = requestHandler.SET_WEBHOOK;
+			}
+			else if (choice.matches("shut\\s+down"))
+			{
+				System.out.println("3");
+				requestHandler.option = requestHandler.SHUTDOWN;
+			}
+			else
+			{
+				System.out.println(":(");
+				continue;
+			}
+			requestHandler.unpark();
+		}
 	}
 	
 	File getPublicKey ()
@@ -290,6 +299,50 @@ public class Launcher
 		catch (Exception e)
 		{
 			e.printStackTrace();
+		}
+		
+	}
+	
+	class ServantFiber extends Fiber<Void>
+	{
+		public final byte INIT = 1;
+		public final byte SET_WEBHOOK = 2;
+		public final byte DISABLE_WEBHOOK = 3;
+		public final byte SHUTDOWN = 4;
+		public byte option;
+		
+		protected Void run () throws SuspendExecution, InterruptedException
+		{
+			while (!shutDown)
+			{
+				handle();
+				Fiber.park();
+			}
+			return null;
+		}
+		
+		private void handle () throws SuspendExecution, InterruptedException
+		{
+			switch (option)
+			{
+				case INIT:
+					transceiver.botInterface = botInterface;
+					transceiver.init();
+					botInterface.transceiver = transceiver;
+					botInterface.bot = transceiver.bot;
+				case SET_WEBHOOK:
+					webhookURL = "https://" + domainAddress + ":" + WebHook.serverPort +
+							"/" +
+							token +
+							"/";
+					transceiver.enableWebhook(webhookURL);
+					break;
+				case DISABLE_WEBHOOK:
+					transceiver.disableWebhook();
+					break;
+				case SHUTDOWN:
+					//TODO add code
+			}
 		}
 		
 	}

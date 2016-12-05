@@ -90,7 +90,6 @@ public class Launcher
 	@Suspendable
 	public Launcher build ()
 	{
-		// TODO check vars
 		if (certPath == null)
 		{
 			System.err.println("Specify path to certificate folder via setCertPath()");
@@ -188,7 +187,7 @@ public class Launcher
 	private void maintenance ()
 	{
 		Scanner in = new Scanner(System.in);
-		while (in.hasNextLine())
+		while (!shutDown && in.hasNextLine())
 		{
 			String choice = in.nextLine().toLowerCase();
 			if (choice.matches("disable\\s+webhook"))
@@ -341,7 +340,10 @@ public class Launcher
 					transceiver.disableWebhook();
 					break;
 				case SHUTDOWN:
-					//TODO add code
+					webHook.shutDown();
+					transceiver.shutDown();
+					shutDown = true;
+					System.exit(0);
 			}
 		}
 		

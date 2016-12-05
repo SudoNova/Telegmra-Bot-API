@@ -133,7 +133,7 @@ public class WebHook
 								@Override
 								public void run ()
 								{
-									while (connection.isOpen())
+									while (connection.isOpen() && !shutDown)
 									{
 										try
 										{
@@ -142,30 +142,22 @@ public class WebHook
 										catch (ConnectionClosedException e)
 										{
 											// Do nothing
-											try
-											{
-												connection.close();
-											}
-											catch (IOException e2)
-											{
-												e2.printStackTrace();
-											}
 											break;
 										}
 										catch (IOException | HttpException e)
 										{
 											e.printStackTrace();
-											try
-											{
-												connection.close();
-											}
-											catch (IOException e2)
-											{
-												e2.printStackTrace();
-											}
 											break;
 										}
 										
+									}
+									try
+									{
+										connection.close();
+									}
+									catch (Exception e)
+									{
+										e.printStackTrace();
 									}
 								}
 								
@@ -178,17 +170,21 @@ public class WebHook
 							e.printStackTrace();
 						}
 					}
-					
+					try
+					{
+						serverSocket.close();
+					}
+					catch (Exception e)
+					{
+						e.printStackTrace();
+					}
 				}
 				
 			};
 			connectionAcceptor.start();
 		}
 		
-		catch (
-				Exception e
-				)
-		
+		catch (Exception e)
 		{
 			e.printStackTrace();
 		}
@@ -205,15 +201,20 @@ public class WebHook
 		return repos.get(serial);
 	}
 	
-	private class Handler implements HttpRequestHandler
+	void shutDown ()
 	{
-		
-		@Override
-		public void handle (HttpRequest request, HttpResponse response, HttpContext context)
-				throws HttpException, IOException
-		{
-			
-		}
+		shutDown = true;
 	}
+//
+//	private class Handler implements HttpRequestHandler
+//	{
+//
+//		@Override
+//		public void handle (HttpRequest request, HttpResponse response, HttpContext context)
+//				throws HttpException, IOException
+//		{
+//
+//		}
+//	}
 }
 

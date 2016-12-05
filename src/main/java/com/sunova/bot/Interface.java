@@ -2,6 +2,7 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
+import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -175,7 +176,20 @@ public class Interface
 		}
 	}
 	
-	
+	void shutDown () throws SuspendExecution, InterruptedException
+	{
+		while (!shutDown)
+		{
+			if (updateRepos.isEmpty() && requestRepos.isEmpty() && requestRepos.isEmpty())
+			{
+				shutDown = true;
+				break;
+			}
+			Strand.sleep(250);
+		}
+		processor.shutDown();
+	}
+
 	private class ResponseChecker extends Fiber<Void>
 	{
 		private final Transceiver transceiver;
@@ -229,6 +243,7 @@ public class Interface
 			return null;
 		}
 	}
+	
 }
 
 

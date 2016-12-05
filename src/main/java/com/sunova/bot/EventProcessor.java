@@ -60,4 +60,8 @@ public class EventProcessor extends Fiber<Void>
 		botInterface.sendMesssage(updateID, chat_id, newMessage);
 	}
 	
+	void shutDown ()
+	{
+		dbDriver.shutDown();
+	}
 }

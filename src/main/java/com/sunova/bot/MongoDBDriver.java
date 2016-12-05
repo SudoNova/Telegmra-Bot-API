@@ -16,12 +16,12 @@ import java.util.Collections;
  */
 public class MongoDBDriver
 {
+	MongoClient dbClient;
 	private MongoCollection<Document> users;
 	private MongoCollection<Document> channels;
-	
 	public MongoDBDriver ()
 	{
-		MongoClient dbClient = MongoClients.create();
+		dbClient = MongoClients.create();
 		MongoDatabase db = dbClient.getDatabase("tgAdmins");
 		users = db.getCollection("users");
 	}
@@ -93,4 +93,8 @@ public class MongoDBDriver
 		return null;
 	}
 	
+	public void shutDown ()
+	{
+		dbClient.close();
+	}
 }

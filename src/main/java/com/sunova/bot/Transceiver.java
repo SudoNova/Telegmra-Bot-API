@@ -31,7 +31,7 @@ public class Transceiver
 	private static String path = "https://api.telegram.org/bot<token>/";
 	private static CloseableHttpClient client;
 	private static ArrayList<Transceiver> repos;
-
+	
 	static
 	{
 		repos = new ArrayList<>(5);
@@ -258,6 +258,21 @@ public class Transceiver
 			}
 		}
 		return success;
+	}
+	
+	void shutDown () throws SuspendExecution, InterruptedException
+	{
+		disableWebhook();
+		shutDown = true;
+		botInterface.shutDown();
+		try
+		{
+			client.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
 	}
 	
 	private class UpdatePuller extends Fiber<Void>

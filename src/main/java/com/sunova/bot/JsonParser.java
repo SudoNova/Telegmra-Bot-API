@@ -3,6 +3,7 @@ package com.sunova.bot;
 //import com.mashape.unirest.http.ObjectMapper;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.telegram.objects.*;
@@ -17,7 +18,8 @@ public class JsonParser
 	private static JsonParser instance;
 	private ObjectReader updateReader;
 	private ObjectReader resultReader;
-	private ObjectWriter writer;
+	private ObjectWriter TObjectWriter;
+	private ObjectWriter KeyboardButtonWriter;
 	
 	private JsonParser ()
 	{
@@ -29,7 +31,8 @@ public class JsonParser
 		mapper.registerModule(module);
 		resultReader = mapper.readerFor(Result.class);
 		updateReader = mapper.readerFor(Update.class);
-		writer = mapper.writerFor(TObject.class);
+		TObjectWriter = mapper.writerFor(TObject.class);
+		KeyboardButtonWriter = mapper.writerFor(KeyboardButton[][].class);
 	}
 	
 	public static JsonParser getInstance ()
@@ -74,6 +77,20 @@ public class JsonParser
 			e.printStackTrace();
 		}
 		return null;
+	}
+	
+	public String deserializeTObject (TObject object)
+	{
+		String result = null;
+		try
+		{
+			result = TObjectWriter.writeValueAsString(object);
+		}
+		catch (JsonProcessingException e)
+		{
+			e.printStackTrace();
+		}
+		return result;
 	}
 	
 	private static class TObjectDeserializer extends JsonDeserializer<TObject>
@@ -122,23 +139,46 @@ public class JsonParser
 		public void serialize (TObject value, JsonGenerator gen, SerializerProvider serializers) throws IOException
 		{
 			gen.writeStartObject();
-			
-			String key = "";
-			
-			if (value instanceof Chat)
+			if (value instanceof ReplyKeyboardMarkup)
 			{
-				key = "chat";
+				ReplyKeyboardMarkup instance = (ReplyKeyboardMarkup) value;
+				gen.writeFieldName("keyboard");
+				gen.writeRawValue(KeyboardButtonWriter.writeValueAsString(instance.getKeyboard()));
+				if (instance.isResize_keyboard())
+				{
+					gen.writeBooleanField("resize_keyboard", true);
+				}
+				if (instance.isOne_time_keyboard())
+				{
+					gen.writeBooleanField("one_time_keyboard", true);
+				}
+				if (instance.isSelective())
+				{
+					gen.writeBooleanField("selective", true);
+				}
+				
 			}
-			else if (value instanceof Message)
+			else if (value instanceof KeyboardButton)
 			{
-				key = "message";
+				KeyboardButton instance = (KeyboardButton) value;
+				gen.writeStringField("text", instance.getText());
+				if (instance.isRequest_contact())
+				{
+					gen.writeBooleanField("request_contact", true);
+				}
+				if (instance.isRequest_location())
+				{
+					gen.writeBooleanField("request_location", true);
+				}
 			}
-			else if (value instanceof MessageEntity)
-			{
-				key = "message_entity";
-			}
-			gen.writeFieldName(key);
-			gen.writeRawValue(writer.writeValueAsString(value));
+//			else if (value instanceof Message)
+//			{
+//				key = "message";
+//			}
+//			else if (value instanceof MessageEntity)
+//			{
+//				key = "message_entity";
+//			}
 			gen.writeEndObject();
 		}
 	}

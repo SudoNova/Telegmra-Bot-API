@@ -77,21 +77,30 @@ public class Interface
 		return repos.get(serial);
 	}
 	
-	protected void sendMesssage (int updateId, int chatID, String text) throws SuspendExecution
+	protected void sendMessage (int updateId, Message message) throws SuspendExecution
 	{
 		updateReposLock.writeLock().lock();
 		updateRepos.remove(updateId);
 		updateReposLock.writeLock().unlock();
-		sendMessage(chatID, text);
+		sendMessage(message);
 	}
 	
-	protected void sendMessage (int chatID, String text) throws SuspendExecution
+	protected void sendMessage (Message message) throws SuspendExecution
 	{
 		try
 		{
 			List<NameValuePair> list = new ArrayList<>(3);
-			list.add(new BasicNameValuePair("chat_id", chatID + ""));
-			list.add(new BasicNameValuePair("text", text));
+			list.add(new BasicNameValuePair("chat_id", message.getChat().getId() + ""));
+			list.add(new BasicNameValuePair("text", message.getText()));
+			ReplyMarkup markup = message.getReply_markup();
+			if (markup != null)
+			{
+				if (markup instanceof ReplyKeyboardMarkup)
+				{
+					String serializedJson = JsonParser.getInstance().deserializeTObject(markup);
+					list.add(new BasicNameValuePair("reply_markup", serializedJson));
+				}
+			}
 //						list.add(new BasicNameValuePair("method", "application/x-www-form-urlencoded"));
 			HttpPost post = new HttpPost();
 			post.setURI(new URI(Transceiver.getPath() + "sendMessage"));
@@ -183,13 +192,12 @@ public class Interface
 			if (updateRepos.isEmpty() && requestRepos.isEmpty() && requestRepos.isEmpty())
 			{
 				shutDown = true;
-				break;
 			}
 			Strand.sleep(250);
 		}
 		processor.shutDown();
 	}
-
+	
 	private class ResponseChecker extends Fiber<Void>
 	{
 		private final Transceiver transceiver;

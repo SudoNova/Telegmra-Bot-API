@@ -19,6 +19,7 @@ public class MongoDBDriver
 	MongoClient dbClient;
 	private MongoCollection<Document> users;
 	private MongoCollection<Document> channels;
+	
 	public MongoDBDriver ()
 	{
 		dbClient = MongoClients.create();
@@ -64,6 +65,7 @@ public class MongoDBDriver
 		{
 			doc.append("userName", user.getUsername());
 		}
+		doc.append("coins", 10);
 		doc.append("state", 1);
 		doc.append("previous_state", 1);
 		doc.put("registeredChannels", Collections.EMPTY_LIST);

@@ -6,4 +6,7 @@ package com.sunova.prebuilt;
 public final class States
 {
 	public static final int START = 1;
+	public static final int WAITING_FOR_PHONE_NUMBER = 2;
+	public static final int PHONE_NUMBER_CONFRIMED = 3;
+	public static final int PHONE_NUMBER_EXISTS = 4;
 }

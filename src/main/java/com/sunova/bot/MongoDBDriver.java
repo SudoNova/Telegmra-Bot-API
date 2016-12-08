@@ -1,11 +1,14 @@
 package com.sunova.bot;
 
 import co.paralleluniverse.fibers.FiberAsync;
+import co.paralleluniverse.fibers.SuspendExecution;
+import com.mongodb.async.SingleResultCallback;
 import com.mongodb.async.client.MongoClient;
 import com.mongodb.async.client.MongoClients;
 import com.mongodb.async.client.MongoCollection;
 import com.mongodb.async.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.telegram.objects.User;
 
@@ -27,7 +30,7 @@ public class MongoDBDriver
 		users = db.getCollection("users");
 	}
 	
-	public Document getUser (int userID) throws Throwable
+	public Document getUser (int userID) throws SuspendExecution, Throwable
 	{
 		Document doc = new FiberAsync<Document, Throwable>()
 		{
@@ -54,8 +57,39 @@ public class MongoDBDriver
 		
 	}
 	
-	public Document insertUser (User user) throws Throwable
+	public boolean updateUser (User user, Document doc) throws SuspendExecution, Throwable
 	{
+		final UpdateResult[] updateResult = new UpdateResult[1];
+		new FiberAsync<UpdateResult, Throwable>()
+		{
+			@Override
+			protected void requestAsync ()
+			{
+				users.updateOne(Filters.eq("userID", user.getId()), new Document("$set", doc), new
+						SingleResultCallback<UpdateResult>()
+						{
+							@Override
+							public void onResult (UpdateResult result, Throwable t)
+							{
+								if (t != null)
+								{
+									updateResult[0] = result;
+									asyncFailed(t);
+								}
+								else
+								{
+									asyncCompleted(result);
+								}
+							}
+						});
+			}
+		}.run();
+		return !(updateResult[0] == null || updateResult[0].wasAcknowledged());
+	}
+	
+	public Document insertUser (User user) throws SuspendExecution, Throwable
+	{
+		boolean success = false;
 		Document doc = new Document();
 		doc.append("userID", user.getId());
 		doc.append("firstName", user.getFirst_name() == null ? "" : user.getFirst_name());
@@ -91,8 +125,7 @@ public class MongoDBDriver
 			}
 			
 		}.run();
-		System.out.println("insert done");
-		return null;
+		return doc;
 	}
 	
 	public void shutDown ()

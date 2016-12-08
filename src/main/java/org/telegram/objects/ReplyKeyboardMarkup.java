@@ -3,7 +3,7 @@ package org.telegram.objects;
 /**
  * Created by HellScre4m on 12/5/2016.
  */
-public class ReplyKeyboardMarkup implements TObject
+public class ReplyKeyboardMarkup implements ReplyMarkup
 {
 	private KeyboardButton[][] keyboard;
 	private boolean resize_keyboard;

@@ -14,6 +14,28 @@ public class Message implements TObject
 	private Message reply_to_message;
 	private String text;
 	private MessageEntity[] entities;
+	private ReplyKeyboardMarkup reply_markup;
+	private Contact contact;
+	
+	public Contact getContact ()
+	{
+		return contact;
+	}
+	
+	public void setContact (Contact contact)
+	{
+		this.contact = contact;
+	}
+	
+	public ReplyKeyboardMarkup getReply_markup ()
+	{
+		return reply_markup;
+	}
+	
+	public void setReply_markup (ReplyKeyboardMarkup reply_markup)
+	{
+		this.reply_markup = reply_markup;
+	}
 	
 	public MessageEntity[] getEntities ()
 	{

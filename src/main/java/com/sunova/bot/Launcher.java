@@ -192,17 +192,14 @@ public class Launcher
 			String choice = in.nextLine().toLowerCase();
 			if (choice.matches("disable\\s+webhook"))
 			{
-				System.out.println("1");
 				requestHandler.option = requestHandler.DISABLE_WEBHOOK;
 			}
 			else if (choice.matches("enable\\s+webhook"))
 			{
-				System.out.println("2");
 				requestHandler.option = requestHandler.SET_WEBHOOK;
 			}
 			else if (choice.matches("shut\\s+down"))
 			{
-				System.out.println("3");
 				requestHandler.option = requestHandler.SHUTDOWN;
 			}
 			else

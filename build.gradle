@@ -50,6 +50,10 @@ tasks.withType(JavaExec)
         {
             jvmArgs "-javaagent:${configurations.quasar.iterator().next()}"
         }
+tasks.withType(JavaCompile)
+        {
+            options.encoding = 'UTF-8'
+        }
 task run(type: JavaExec) {
 
     standardInput = System.in

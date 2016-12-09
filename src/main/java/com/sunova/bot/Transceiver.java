@@ -163,7 +163,8 @@ public class Transceiver
 		}
 	}
 	
-	protected void execute (int requestID, HttpUriRequest request) throws SuspendExecution
+	
+	void execute (int requestID, HttpUriRequest request) throws SuspendExecution
 	{
 //		System.out.println("Transceiver executing request");
 		try

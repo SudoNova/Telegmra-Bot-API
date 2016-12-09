@@ -5,31 +5,33 @@ package org.telegram.objects;
  */
 public class Chat implements TObject
 {
-	public static final byte PRIVATE = 1;
-	public static final byte GROUP = 2;
-	public static final byte SUPERGROUP = 3;
-	public static final byte CHANNEL = 4;
-	private int id;
-	private byte operationType;
+	
+	private boolean all_members_are_administrators;
+	private long id;
 	private String title;
 	private String username;
 	private String first_name;
 	private String last_name;
 	private String type;
 	
-	public int getId ()
+	public boolean isAll_members_are_administrators ()
+	{
+		return all_members_are_administrators;
+	}
+	
+	public void setAll_members_are_administrators (boolean all_members_are_administrators)
+	{
+		this.all_members_are_administrators = all_members_are_administrators;
+	}
+	
+	public long getId ()
 	{
 		return id;
 	}
 	
-	public void setId (int id)
+	public void setId (long id)
 	{
 		this.id = id;
-	}
-	
-	public byte getOperationType ()
-	{
-		return operationType;
 	}
 	
 	public String getTitle ()
@@ -80,19 +82,6 @@ public class Chat implements TObject
 	public void setType (String type)
 	{
 		this.type = type;
-		switch (type)
-		{
-			case "private":
-				operationType = PRIVATE;
-				break;
-			case "group":
-				operationType = GROUP;
-				break;
-			case "supergroup":
-				operationType = SUPERGROUP;
-				break;
-			case "channel":
-				operationType = CHANNEL;
-		}
 	}
+	
 }

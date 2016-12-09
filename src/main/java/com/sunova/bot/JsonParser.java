@@ -106,14 +106,14 @@ public class JsonParser
 //				System.out.println("update");
 				resultValue = p.getCodec().treeToValue(tree, Update.class);
 			}
-			else if (tree.has("message_id"))
+//			else if (tree.has("message_id"))
+//			{
+////				System.out.println("message");
+//				resultValue = p.getCodec().treeToValue(tree, Message.class);
+//			}
+			else if (tree.has("title"))
 			{
-//				System.out.println("message");
-				resultValue = p.getCodec().treeToValue(tree, Message.class);
-			}
-			else if (tree.has("chat"))
-			{
-				resultValue = p.getCodec().treeToValue(tree.get("chat"), Chat.class);
+				resultValue = p.getCodec().treeToValue(tree, Chat.class);
 			}
 			else if (tree.has("message_entity"))
 			{

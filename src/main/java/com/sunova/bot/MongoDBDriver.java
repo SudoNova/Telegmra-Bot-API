@@ -65,7 +65,7 @@ public class MongoDBDriver
 			@Override
 			protected void requestAsync ()
 			{
-				users.updateOne(Filters.eq("userID", user.getId()), new Document("$set", doc), new
+				users.updateOne(Filters.eq("userID", user.getId()), doc, new
 						SingleResultCallback<UpdateResult>()
 						{
 							@Override

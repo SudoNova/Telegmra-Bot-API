@@ -2,6 +2,7 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
+import co.paralleluniverse.fibers.TrueThreadLocal;
 import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
 import org.apache.http.NameValuePair;
@@ -22,13 +23,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Interface
 {
+	private static final ThreadLocal<Chat> td = new TrueThreadLocal<>();
 	private static ArrayList<Interface> repos;
 	
 	static
 	{
 		repos = new ArrayList<>(5);
 	}
-	
+
 	User bot;
 	Transceiver transceiver;
 	/**
@@ -51,6 +53,7 @@ public class Interface
 	private Fiber<Void> serverResponseChecker;
 	private EventProcessor processor;
 	
+	
 	private Interface ()
 	{
 		updateRepos = new HashMap<>();
@@ -63,8 +66,8 @@ public class Interface
 		
 		nextReqID = new AtomicInteger(0);
 		processor = new EventProcessor(this);
-		
-		serverResponseChecker = new ResponseChecker(transceiver).start();
+		//TODO fix null transceiver
+		serverResponseChecker = new ResponseChecker().start();
 	}
 	
 	static Interface getInstance (Launcher launcher)
@@ -83,6 +86,38 @@ public class Interface
 		updateRepos.remove(updateId);
 		updateReposLock.writeLock().unlock();
 		sendMessage(message);
+	}
+	
+	public Chat getChatID (String userName) throws SuspendExecution
+	{
+		List<NameValuePair> list = new ArrayList<>(3);
+		list.add(new BasicNameValuePair("chat_id", userName));
+		try
+		{
+			HttpPost post = new HttpPost();
+			post.setURI(new URI(Transceiver.getPath() + "getChat"));
+			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
+			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
+			int reqID = nextReqID.getAndIncrement();
+			requestWaitingLock.writeLock().lock();
+			requestWaiting.put(reqID, System.currentTimeMillis());
+			requestWaitingLock.writeLock().unlock();
+			requestReposLock.writeLock().lock();
+			requestRepos.put(reqID, post);
+			requestReposLock.writeLock().unlock();
+			sendRequest(reqID, post);
+			return td.get();
+		}
+		catch (IOException | URISyntaxException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public Chat getChatUserName (int chatID) throws SuspendExecution
+	{
+		return getChatID(chatID + "");
 	}
 	
 	protected void sendMessage (Message message) throws SuspendExecution
@@ -181,7 +216,16 @@ public class Interface
 					requestReposLock.writeLock().unlock();
 				}
 			}
-			
+			else if (object instanceof Chat)
+			{
+				td.set((Chat) object);
+				requestWaitingLock.writeLock().lock();
+				requestWaiting.remove(requestID);
+				requestWaitingLock.writeLock().unlock();
+				requestReposLock.writeLock().lock();
+				requestRepos.remove(requestID);
+				requestReposLock.writeLock().unlock();
+			}
 		}
 	}
 	
@@ -200,13 +244,6 @@ public class Interface
 	
 	private class ResponseChecker extends Fiber<Void>
 	{
-		private final Transceiver transceiver;
-		
-		public ResponseChecker (Transceiver transceiver)
-		{
-			this.transceiver = transceiver;
-		}
-		
 		@Override
 		protected Void run () throws InterruptedException, SuspendExecution
 		{
@@ -224,7 +261,7 @@ public class Interface
 						requestReposLock.readLock().lock();
 						HttpUriRequest request = requestRepos.get(id);
 						requestReposLock.readLock().unlock();
-						Fiber<Void> exec = new Fiber<Void>()
+						new Fiber<Void>()
 						{
 							@Override
 							protected Void run () throws InterruptedException, SuspendExecution
@@ -237,14 +274,12 @@ public class Interface
 						{
 							requestWaitingLock.readLock().unlock();
 							requestWaitingLock.writeLock().lock();
+							requestWaiting.put(id, System.currentTimeMillis());
+							requestWaitingLock.writeLock().unlock();
 							requestWaitingLock.readLock().lock();
 						}
-						requestWaiting.put(id, System.currentTimeMillis());
 					}
-					if (requestWaitingLock.isWriteLockedByCurrentStrand())
-					{
-						requestWaitingLock.writeLock().unlock();
-					}
+					
 				}
 				requestWaitingLock.readLock().unlock();
 			}

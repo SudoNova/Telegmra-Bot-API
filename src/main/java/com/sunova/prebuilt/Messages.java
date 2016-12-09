@@ -13,6 +13,8 @@ public final class Messages
 	public static final String REGISTER_POST;
 	public static final String CONTACT_US;
 	public static final String CHOOSE_MAIN_MENU;
+	public static final String SEND_POST;
+	public static final String RETURN_TO_MAIN;
 	
 	static
 	{
@@ -27,6 +29,8 @@ public final class Messages
 		VIEW_POSTS = "بازدید از پست‌ها";
 		REGISTER_POST = "ثبت پست";
 		CONTACT_US = "تماس با ما";
+		SEND_POST = "لطفا لینک پست مورد نظر که قصد افزایش بازدید آن را دارید ارسال کنید.";
+		RETURN_TO_MAIN = "انصراف و بازگشت به منوی اصلی";
 
 //		}
 //		catch (UnsupportedEncodingException e)

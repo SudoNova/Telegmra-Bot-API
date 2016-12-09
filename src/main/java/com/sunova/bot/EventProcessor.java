@@ -11,6 +11,9 @@ import org.telegram.objects.Message;
 import org.telegram.objects.Update;
 import org.telegram.objects.User;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Created by HellScre4m on 5/9/2016.
  */
@@ -57,7 +60,8 @@ public class EventProcessor extends Fiber<Void>
 									.replace("{last}", from.getLast_name()));
 					message.setReply_markup(Keyboards.GET_PHONE);
 					botInterface.sendMessage(updateID, message);
-					dbDriver.updateUser(from, new Document("state", States.WAITING_FOR_PHONE_NUMBER));
+					dbDriver.updateUser(from, new Document("$set", new Document("state", States
+							.WAITING_FOR_PHONE_NUMBER)));
 					break;
 				case States.WAITING_FOR_PHONE_NUMBER:
 					Contact contact = message.getContact();
@@ -68,14 +72,61 @@ public class EventProcessor extends Fiber<Void>
 					}
 					else
 					{
-						dbDriver.updateUser(from, new Document("phoneNumber", Long.parseLong(contact.getPhone_number
-								())).append("state", States.PHONE_NUMBER_CONFRIMED));
 						//TODO check for previous account
+						dbDriver.updateUser(from, new Document("$set", new Document("phoneNumber", Long.parseLong
+								(contact
+										 .getPhone_number
+												 ())).append("state", States.MAIN_MENU)));
 						message.setText(Messages.PHONE_NUMBER_CONFIRMED);
 						botInterface.sendMessage(updateID, message);
 						message.setText(Messages.CHOOSE_MAIN_MENU);
 						message.setReply_markup(Keyboards.MAIN_MENU);
 						botInterface.sendMessage(message);
+					}
+					break;
+				case States.MAIN_MENU:
+					String choice = message.getText();
+					if (choice.equals(Messages.REGISTER_POST))
+					{
+						message.setText(Messages.SEND_POST);
+						message.setReply_markup(Keyboards.SEND_POST);
+						botInterface.sendMessage(updateID, message);
+						dbDriver.updateUser(from, new Document("$set", new Document("state", States.WAITING_FOR_POST)));
+					}
+					//TODO other choices
+					break;
+				case States.WAITING_FOR_POST:
+					if (message.getForward_from_chat() != null)
+					{
+						long chatID = message.getForward_from_chat().getId();
+						int messageID = message.getForward_from_message_id();
+						//TODO add to db
+						System.out.println(chatID + "   " + messageID);
+					}
+					else
+					{
+						Pattern pattern = Pattern.compile("/\\w+/");
+						String messageBody = message.getText();
+						Matcher matcher = pattern.matcher(messageBody);
+						String channelName;
+						if (matcher.find())
+						{
+							channelName = matcher.group();
+							channelName = channelName.substring(1, channelName.length() - 1);
+							long channelID = botInterface.getChatID("@" + channelName).getId();
+							pattern = Pattern.compile("/\\d+");
+							matcher = pattern.matcher(messageBody);
+							if (matcher.find())
+							{
+								int messageID = Integer.parseInt(matcher.group().substring(1));
+								System.out.println(channelID + " " + messageID);
+								//TODO add to db
+								
+							}
+							
+						}
+						
+						
 					}
 			}
 //			else

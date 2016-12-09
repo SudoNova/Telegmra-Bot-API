@@ -9,7 +9,6 @@ public class User implements TObject
 	public static final byte ADMIN = 1;
 	public static final byte FREE_USER = 2;
 	public static final byte PREMIUM_USER = 3;
-	private MessageEntity[] entities;
 	private int id;
 	private String first_name;
 	private String last_name;
@@ -54,16 +53,6 @@ public class User implements TObject
 	public void setUsername (String username)
 	{
 		this.username = username;
-	}
-	
-	public MessageEntity[] getEntities ()
-	{
-		return entities;
-	}
-	
-	public void setEntities (MessageEntity[] entities)
-	{
-		this.entities = entities;
 	}
 	
 }

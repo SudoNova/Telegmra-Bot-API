@@ -10,6 +10,7 @@ public final class Keyboards
 {
 	public static final ReplyKeyboardMarkup GET_PHONE;
 	public static final ReplyKeyboardMarkup MAIN_MENU;
+	public static final ReplyKeyboardMarkup SEND_POST;
 	
 	static
 	{
@@ -33,6 +34,14 @@ public final class Keyboards
 		button.setText("به زودی");
 		MAIN_MENU.setKeyboard(buttons);
 		MAIN_MENU.setResize_keyboard(true);
+		
+		SEND_POST = new ReplyKeyboardMarkup();
+		buttons = new KeyboardButton[1][1];
+		button = buttons[0][0] = new KeyboardButton();
+		button.setText(Messages.RETURN_TO_MAIN);
+		SEND_POST.setKeyboard(buttons);
+		SEND_POST.setResize_keyboard(true);
+		
 //		GET_PHONE.
 	}
 }

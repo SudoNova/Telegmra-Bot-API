@@ -11,6 +11,9 @@ import org.telegram.objects.Message;
 import org.telegram.objects.Update;
 import org.telegram.objects.User;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -19,6 +22,7 @@ import java.util.regex.Pattern;
  */
 public class EventProcessor extends Fiber<Void>
 {
+	private static final int visitFactor = 2;
 	private Interface botInterface;
 	private MongoDBDriver dbDriver;
 	
@@ -73,15 +77,16 @@ public class EventProcessor extends Fiber<Void>
 					else
 					{
 						//TODO check for previous account
-						dbDriver.updateUser(from, new Document("$set", new Document("phoneNumber", Long.parseLong
-								(contact
-										 .getPhone_number
-												 ())).append("state", States.MAIN_MENU)));
+						
 						message.setText(Messages.PHONE_NUMBER_CONFIRMED);
 						botInterface.sendMessage(updateID, message);
 						message.setText(Messages.CHOOSE_MAIN_MENU);
 						message.setReply_markup(Keyboards.MAIN_MENU);
 						botInterface.sendMessage(message);
+						dbDriver.updateUser(from, new Document("$set", new Document("phoneNumber", Long.parseLong
+								(contact
+										 .getPhone_number
+												 ())).append("state", States.MAIN_MENU)));
 					}
 					break;
 				case States.MAIN_MENU:
@@ -96,11 +101,20 @@ public class EventProcessor extends Fiber<Void>
 					//TODO other choices
 					break;
 				case States.WAITING_FOR_POST:
-					if (message.getForward_from_chat() != null)
+					Long chatID = null;
+					Integer messageID = null;
+					if (message.getText() != null && message.getText().equals(Messages.RETURN_TO_MAIN))
 					{
-						long chatID = message.getForward_from_chat().getId();
-						int messageID = message.getForward_from_message_id();
-						//TODO add to db
+						message.setText(Messages.CHOOSE_MAIN_MENU);
+						message.setReply_markup(Keyboards.MAIN_MENU);
+						botInterface.sendMessage(updateID, message);
+						Document newDoc = new Document("set", new Document("state", States.MAIN_MENU));
+						dbDriver.updateUser(from, newDoc);
+					}
+					else if (message.getForward_from_chat() != null)
+					{
+						chatID = message.getForward_from_chat().getId();
+						messageID = message.getForward_from_message_id();
 						System.out.println(chatID + "   " + messageID);
 					}
 					else
@@ -113,26 +127,87 @@ public class EventProcessor extends Fiber<Void>
 						{
 							channelName = matcher.group();
 							channelName = channelName.substring(1, channelName.length() - 1);
-							long channelID = botInterface.getChatID("@" + channelName).getId();
+							chatID = botInterface.getChatID("@" + channelName).getId();
 							pattern = Pattern.compile("/\\d+");
 							matcher = pattern.matcher(messageBody);
 							if (matcher.find())
 							{
-								int messageID = Integer.parseInt(matcher.group().substring(1));
-								System.out.println(channelID + " " + messageID);
-								//TODO add to db
-								
+								messageID = Integer.parseInt(matcher.group().substring(1));
+								System.out.println(chatID + " " + messageID);
 							}
 							
 						}
-						
+					}
+					if (!(chatID == null || messageID == null))
+					{
+						message.setText(Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
+						message.setReply_markup(Keyboards.ENTER_INPUT);
+						botInterface.sendMessage(message);
+						Document newDoc = new Document("$set", new Document("state", States.WAITING_FOR_AMOUNT).append
+								("previous_state", States.WAITING_FOR_POST).append("temp", Arrays
+								.asList(chatID, messageID)));
+						dbDriver.updateUser(from, newDoc);
 						
 					}
+					break;
+				case States.WAITING_FOR_AMOUNT:
+					ArrayList<Integer> list = new ArrayList<>();
+					Scanner scanner = new Scanner(message.getText());
+					while (scanner.hasNextInt())
+					{
+						list.add(scanner.nextInt());
+					}
+					if (!list.isEmpty())
+					{
+						int coins = doc.getInteger("coins");
+						int previousState = doc.getInteger("previous_state");
+						if (previousState == States.WAITING_FOR_POST)
+						{
+							if (list.get(0) * visitFactor > coins)
+							{
+								
+								message.setText(Messages.AMOUNT_EXCEEDS);
+								botInterface.sendMessage(message);
+							}
+							else
+							{
+								Document newDoc = new Document("$addToSet", new Document("order_amounts", list));
+								newDoc.append("$set", new Document("state", States.CONFIRM));
+								message.setText(Messages.CONFIRM_VIEW);
+								message.setReply_markup(Keyboards.CONFIRM);
+								botInterface.sendMessage(message);
+								dbDriver.updateUser(from, newDoc);
+							}
+						}
+
+//						else if (previousState == States.)
+						//TODO add channel
+					}
+					break;
+				case States.CONFIRM:
+					String text = message.getText();
+					if (text != null)
+					{
+						if (text.equals(Messages.YES))
+						{
+							int previous_state = doc.getInteger("previous_state");
+							if (previous_state == States.WAITING_FOR_POST)
+							{
+								
+							}
+							else if (previous_state == States.WAITING_FOR_CHANNEL)
+							{
+								//TODO add channel
+							}
+							
+						}
+						else if (text.equals((Messages.NO)))
+						{
+							
+						}
+					}
 			}
-//			else
-//			{
-//				System.out.println(doc.toJson());
-//			}
+			
 		}
 		catch (Throwable throwable)
 		{

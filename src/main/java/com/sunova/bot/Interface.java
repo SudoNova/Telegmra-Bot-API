@@ -80,12 +80,10 @@ public class Interface
 		return repos.get(serial);
 	}
 	
-	protected void sendMessage (int updateId, Message message) throws SuspendExecution
+	protected void sendMessage (int updateID, Message message) throws SuspendExecution
 	{
-		updateReposLock.writeLock().lock();
-		updateRepos.remove(updateId);
-		updateReposLock.writeLock().unlock();
 		sendMessage(message);
+		confirmUpdate(updateID);
 	}
 	
 	public Chat getChatID (String userName) throws SuspendExecution
@@ -242,6 +240,13 @@ public class Interface
 		processor.shutDown();
 	}
 	
+	public void confirmUpdate (int updateID)
+	{
+		updateReposLock.writeLock().lock();
+		updateRepos.remove(updateID);
+		updateReposLock.writeLock().unlock();
+	}
+
 	private class ResponseChecker extends Fiber<Void>
 	{
 		@Override

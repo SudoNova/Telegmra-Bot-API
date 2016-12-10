@@ -15,6 +15,11 @@ public final class Messages
 	public static final String CHOOSE_MAIN_MENU;
 	public static final String SEND_POST;
 	public static final String RETURN_TO_MAIN;
+	public static final String ENTER_AMOUNT_VISIT;
+	public static final String CONFIRM_VIEW;
+	public static final String AMOUNT_EXCEEDS;
+	public static final String YES;
+	public static final String NO;
 	
 	static
 	{
@@ -31,8 +36,14 @@ public final class Messages
 		CONTACT_US = "تماس با ما";
 		SEND_POST = "لطفا لینک پست مورد نظر که قصد افزایش بازدید آن را دارید ارسال کنید.";
 		RETURN_TO_MAIN = "انصراف و بازگشت به منوی اصلی";
-
+		ENTER_AMOUNT_VISIT = "لطفا تعداد بازدید " +
+				"مورد نظر را وارد کنید. هزینه هر بازدید دو سکه است.\n شما در حال حاضر {coins} سکه دارید.";
+		CONFIRM_VIEW = "شما قصد خرید {amount} بازدید به ارزش {value} سکه را دارید.\nآیا از سفارش خود امطمینان دارید؟";
+		AMOUNT_EXCEEDS = "مقدار سفارش داده شده از اعتبار حساب شما بیش‌تر است. لطفا مقدار کم‌تری وارد کنید.";
+		YES = "بله";
+		NO = "خیر";
 //		}
+
 //		catch (UnsupportedEncodingException e)
 //		{
 //			e.printStackTrace();

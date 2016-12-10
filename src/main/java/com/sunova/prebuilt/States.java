@@ -10,4 +10,7 @@ public final class States
 	public static final int MAIN_MENU = 3;
 	public static final int PHONE_NUMBER_EXISTS = 4;
 	public static final int WAITING_FOR_POST = 5;
+	public static final int WAITING_FOR_CHANNEL = 8;
+	public static final int WAITING_FOR_AMOUNT = 6;
+	public static final int CONFIRM = 7;
 }

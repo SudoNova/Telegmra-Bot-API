@@ -99,7 +99,7 @@ public class WebHook
 				{
 					if (request.getRequestLine().getMethod().toUpperCase().equals("POST"))
 					{
-						System.out.println("New update. Sending to trancseiver");
+//						System.out.println("New update. Sending to trancseiver");
 						transceiver.receiveUpdate(request);
 						response.setStatusCode(HttpStatus.SC_OK);
 						StringEntity entity = new StringEntity("{}");
@@ -107,7 +107,7 @@ public class WebHook
 					}
 					else
 					{
-						System.out.println("Error recieving webhook");
+						System.out.println("Error receiving webhook");
 						response.setStatusCode(HttpStatus.SC_UNAUTHORIZED);
 					}
 				}

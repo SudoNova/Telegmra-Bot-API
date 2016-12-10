@@ -5,20 +5,20 @@ package org.telegram.objects;
  */
 public class Document implements TObject
 {
-	private String field_id;
+	private String file_id;
 	private String file_name;
 	private String mime_type;
 	private int file_size;
 	private PhotoSize thumb;
 	
-	public String getField_id ()
+	public String getFile_id ()
 	{
-		return field_id;
+		return file_id;
 	}
 	
-	public void setField_id (String field_id)
+	public void setFile_id (String file_id)
 	{
-		this.field_id = field_id;
+		this.file_id = file_id;
 	}
 	
 	public String getFile_name ()

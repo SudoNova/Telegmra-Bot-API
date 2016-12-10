@@ -11,6 +11,9 @@ public final class Keyboards
 	public static final ReplyKeyboardMarkup GET_PHONE;
 	public static final ReplyKeyboardMarkup MAIN_MENU;
 	public static final ReplyKeyboardMarkup SEND_POST;
+	public static final ReplyKeyboardMarkup ENTER_INPUT;
+	public static final ReplyKeyboardMarkup CONFIRM;
+	public static final ReplyKeyboardMarkup CONFIRM_VIEW;
 	
 	static
 	{
@@ -42,6 +45,30 @@ public final class Keyboards
 		SEND_POST.setKeyboard(buttons);
 		SEND_POST.setResize_keyboard(true);
 		
-//		GET_PHONE.
+		ENTER_INPUT = new ReplyKeyboardMarkup();
+		buttons = new KeyboardButton[1][1];
+		button = buttons[0][0] = new KeyboardButton();
+		button.setText("انصراف و بازگشت به منوی قبلی");
+		ENTER_INPUT.setKeyboard(buttons);
+		ENTER_INPUT.setResize_keyboard(true);
+		
+		CONFIRM = new ReplyKeyboardMarkup();
+		buttons = new KeyboardButton[2][1];
+		button = buttons[0][0] = new KeyboardButton();
+		button.setText(Messages.YES);
+		button = buttons[1][0] = new KeyboardButton();
+		button.setText(Messages.NO);
+		CONFIRM.setKeyboard(buttons);
+		CONFIRM.setResize_keyboard(true);
+		
+		CONFIRM_VIEW = new ReplyKeyboardMarkup();
+		buttons = new KeyboardButton[2][1];
+		button = buttons[0][0] = new KeyboardButton();
+		button.setText(Messages.VIEW_AGAIN);
+		button = buttons[1][0] = new KeyboardButton();
+		button.setText(Messages.VIEW_CONFIRMED);
+		CONFIRM_VIEW.setKeyboard(buttons);
+		CONFIRM_VIEW.setResize_keyboard(true);
+		//		GET_PHONE.
 	}
 }

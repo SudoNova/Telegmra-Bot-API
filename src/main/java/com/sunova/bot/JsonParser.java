@@ -59,6 +59,7 @@ public class JsonParser
 		}
 		catch (IOException e)
 		{
+			System.out.println(new String(input));
 			e.printStackTrace();
 		}
 		return null;
@@ -106,11 +107,11 @@ public class JsonParser
 //				System.out.println("update");
 				resultValue = p.getCodec().treeToValue(tree, Update.class);
 			}
-//			else if (tree.has("message_id"))
-//			{
-////				System.out.println("message");
-//				resultValue = p.getCodec().treeToValue(tree, Message.class);
-//			}
+			else if (tree.has("message_id"))
+			{
+//				System.out.println("message");
+				resultValue = p.getCodec().treeToValue(tree, Message.class);
+			}
 			else if (tree.has("title"))
 			{
 				resultValue = p.getCodec().treeToValue(tree, Chat.class);

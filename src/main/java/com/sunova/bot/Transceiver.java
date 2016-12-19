@@ -164,19 +164,24 @@ public class Transceiver
 	}
 	
 	
-	void execute (int requestID, HttpUriRequest request) throws SuspendExecution
+	Result execute (HttpUriRequest request) throws SuspendExecution
 	{
 //		System.out.println("Transceiver executing request");
 		try
 		{
 			HttpResponse response = client.execute(request);
 			Result result = getResult(response);
-			botInterface.receiveResult(requestID, result);
+			botInterface.receiveResult(result);
+			return result;
 		}
 //		catch (IOException e)
 		catch (Exception e)
 		{
 			e.printStackTrace();
+			Result result = new Result();
+			result.setOk(false);
+			result.setError_code(-1);
+			return result;
 		}
 	}
 	
@@ -215,7 +220,8 @@ public class Transceiver
 		}
 		StringBody sb = new StringBody(webhookURL,
 		                               ContentType
-				                               .TEXT_PLAIN);
+				                               .TEXT_PLAIN
+		);
 		entityBuilder.addPart("url", sb);
 		HttpEntity entity = entityBuilder.build();
 		webHookInitRequest.setEntity(entity);

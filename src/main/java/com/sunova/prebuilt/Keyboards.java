@@ -13,6 +13,7 @@ public final class Keyboards
 	public static final ReplyKeyboardMarkup SEND_POST;
 	public static final ReplyKeyboardMarkup ENTER_INPUT;
 	public static final ReplyKeyboardMarkup CONFIRM;
+	public static final ReplyKeyboardMarkup CONFIRM_VIEW;
 	
 	static
 	{
@@ -59,6 +60,15 @@ public final class Keyboards
 		button.setText(Messages.NO);
 		CONFIRM.setKeyboard(buttons);
 		CONFIRM.setResize_keyboard(true);
+		
+		CONFIRM_VIEW = new ReplyKeyboardMarkup();
+		buttons = new KeyboardButton[2][1];
+		button = buttons[0][0] = new KeyboardButton();
+		button.setText(Messages.VIEW_AGAIN);
+		button = buttons[1][0] = new KeyboardButton();
+		button.setText(Messages.VIEW_CONFIRMED);
+		CONFIRM_VIEW.setKeyboard(buttons);
+		CONFIRM_VIEW.setResize_keyboard(true);
 		//		GET_PHONE.
 	}
 }

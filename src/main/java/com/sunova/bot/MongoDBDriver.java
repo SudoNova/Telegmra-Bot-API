@@ -2,17 +2,24 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.FiberAsync;
 import co.paralleluniverse.fibers.SuspendExecution;
+import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
-import com.mongodb.async.client.MongoClient;
-import com.mongodb.async.client.MongoClients;
-import com.mongodb.async.client.MongoCollection;
-import com.mongodb.async.client.MongoDatabase;
-import com.mongodb.client.model.Filters;
+import com.mongodb.async.client.*;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.IndexOptions;
+import com.mongodb.client.model.ReturnDocument;
+import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.telegram.objects.User;
 
+import java.util.AbstractMap;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static com.mongodb.client.model.Filters.*;
 
 /**
  * Created by HellScre4m on 11/30/2016.
@@ -22,38 +29,127 @@ public class MongoDBDriver
 	MongoClient dbClient;
 	private MongoCollection<Document> users;
 	private MongoCollection<Document> channels;
+	private MongoCollection<Document> posts;
+	private MongoCollection<Document> misc;
+	private HashMap<Integer, AbstractMap.SimpleEntry<AsyncBatchCursor<Document>, List<Document>>> bachCursorMap;
 	
 	public MongoDBDriver ()
 	{
 		dbClient = MongoClients.create();
 		MongoDatabase db = dbClient.getDatabase("tgAdmins");
 		users = db.getCollection("users");
+		channels = db.getCollection("channels");
+		posts = db.getCollection("posts");
+		misc = db.getCollection("misc");
+		bachCursorMap = new HashMap<>();
+		new co.paralleluniverse.fibers.Fiber<Void>()
+		{
+			protected Void run () throws InterruptedException, SuspendExecution
+			{
+				try
+				{
+					new FiberAsync<String, Throwable>()
+					{
+						@Override
+						protected void requestAsync ()
+						{
+							users.createIndex(new Document("userID", 1),
+							                  new IndexOptions().background(true).unique(true).name
+									                  ("Users"), (r,
+							                                      t) ->
+							                  {
+								                  posts.createIndex(new Document("chatID", 1).append("messageID", 1),
+								                                    new IndexOptions().background(true).unique(true)
+										                                    .name
+												                                    ("Posts"), (rr,
+								                                                                tt) ->
+								                                    {
+									                                    channels.createIndex(
+											                                    new Document("chatID", 1),
+											                                    new IndexOptions().background(true)
+													                                    .unique(true).name
+													                                    ("Channels")
+											                                    , (rrr,
+											                                       ttt) ->
+											                                    {
+												                                    posts.createIndex(new Document
+														                                                      ("postReqID",
+														                                                       1
+														                                                      ),
+												                                                      new IndexOptions()
+														                                                      .background(
+																                                                      true)
+														                                                      .unique(true)
+														                                                      .name
+																                                                      ("postReqID"),
+												                                                      (rrrrr,
+												                                                       ttttt) ->
+												                                                      {
+													                                                      channels.createIndex(
+															                                                      new
+																	                                                      Document(
+																	                                                      "channelReqID",
+																	                                                      1
+															                                                      ),
+															                                                      new IndexOptions()
+																	                                                      .background(
+																			                                                      true)
+																	                                                      .unique(true)
+																	                                                      .name
+																			                                                      ("channelReqID")
+															                                                      ,
+															                                                      (rrrrrr,
+															                                                       ttttttt) ->
+															                                                      {
+																                                                      asyncCompleted(
+																		                                                      r);
+															                                                      }
+													                                                                          );
+												                                                      }
+												                                                     );
+											                                    }
+									
+									                                                        );
+								                                    }
+								                                   );
+								
+							                  }
+							                 );
+						}
+					}.run();
+				}
+				catch (Throwable throwable)
+				{
+					throwable.printStackTrace();
+				}
+				return null;
+			}
+		}.start();
 	}
 	
 	public Document getUser (int userID) throws SuspendExecution, Throwable
 	{
-		Document doc = new FiberAsync<Document, Throwable>()
+		return new FiberAsync<Document, Throwable>()
 		{
 			@Override
 			protected void requestAsync ()
 			{
-				users.find(Filters.eq("userID", userID)).first((Document v, Throwable t) ->
-				                                               {
-					                                               if (t != null)
-					                                               {
-						                                               asyncFailed(t);
-					                                               }
-					                                               else
-					                                               {
-						                                               asyncCompleted(v);
-					                                               }
-				                                               }
+				users.find(eq("userID", userID)).first((Document v, Throwable t) ->
+				                                       {
+					                                       if (t != null)
+					                                       {
+						                                       asyncFailed(t);
+					                                       }
+					                                       else
+					                                       {
+						                                       asyncCompleted(v);
+					                                       }
+				                                       }
 				
-				);
+				                                      );
 				
 			}
 		}.run();
-		return doc;
 		
 	}
 	
@@ -65,7 +161,7 @@ public class MongoDBDriver
 			@Override
 			protected void requestAsync ()
 			{
-				users.updateOne(Filters.eq("userID", user.getId()), doc, new
+				users.updateOne(eq("userID", user.getId()), doc, new
 						SingleResultCallback<UpdateResult>()
 						{
 							@Override
@@ -73,11 +169,11 @@ public class MongoDBDriver
 							{
 								if (t != null)
 								{
-									updateResult[0] = result;
 									asyncFailed(t);
 								}
 								else
 								{
+									updateResult[0] = result;
 									asyncCompleted(result);
 								}
 							}
@@ -89,7 +185,7 @@ public class MongoDBDriver
 	
 	public Document insertUser (User user) throws SuspendExecution, Throwable
 	{
-		boolean success = false;
+		
 		Document doc = new Document();
 		doc.append("userID", user.getId());
 		doc.append("firstName", user.getFirst_name() == null ? "" : user.getFirst_name());
@@ -101,27 +197,33 @@ public class MongoDBDriver
 		}
 		doc.append("coins", 10);
 		doc.append("state", 1);
-		doc.append("previous_state", 1);
+		doc.append("previous_state", 1).append("registrationDate", System.currentTimeMillis());
 		doc.put("registeredChannels", Collections.EMPTY_LIST);
 		doc.put("visitedPosts", Collections.EMPTY_LIST);
 //		doc.append("registeredChannels", new ArrayList<>(Arrays.asList(test)));
 		
-		new FiberAsync<Void, Throwable>()
+		new FiberAsync<UpdateResult, Throwable>()
 		{
 			@Override
 			protected void requestAsync ()
 			{
-				users.insertOne(doc, (r, t) ->
-				{
-					if (t != null)
-					{
-						asyncFailed(t);
-					}
-					else
-					{
-						asyncCompleted(r);
-					}
-				});
+				users.updateOne(eq("userID", user.getId()), new Document("$set", doc),
+				                new UpdateOptions()
+						                .upsert
+								                (true),
+				                (r,
+				                 t) ->
+				                {
+					                if (t != null)
+					                {
+						                asyncFailed(t);
+					                }
+					                else
+					                {
+						                asyncCompleted(r);
+					                }
+				                }
+				               );
 			}
 			
 		}.run();
@@ -131,5 +233,141 @@ public class MongoDBDriver
 	public void shutDown ()
 	{
 		dbClient.close();
+	}
+	
+	public void insertNewPostViewOrder (User user, long chatID, int messageID, int amount) throws SuspendExecution
+	{
+		try
+		{
+			Document result = new FiberAsync<Document, Throwable>()
+			{
+				@Override
+				protected void requestAsync ()
+				{
+					misc.findOneAndUpdate(
+							new Document(),
+							new Document(
+									"$inc", new Document("postReqID", 1)),
+							new FindOneAndUpdateOptions().upsert(true)
+									.returnDocument(ReturnDocument.BEFORE),
+							new SingleResultCallback<Document>()
+							{
+								@Override
+								public void onResult (Document result, Throwable t)
+								{
+									int postReqId = result.getInteger("postReqID");
+									long time = System.currentTimeMillis();
+									Document newDoc = new Document("postReqID", postReqId)
+											.append("owner", user.getId()).append("amount", amount)
+											.append("currentView", 0)
+											.append("time", time).append("ended", false).append("endTime", 0);
+									posts.updateOne(and(eq("chatID", chatID), eq("messageID", messageID)), new
+											                Document("$push", new Document("orders", newDoc)), new
+											                UpdateOptions().upsert
+											                (true), (rr,
+									                                 tt) ->
+									                {
+										                if (t != null)
+										                {
+											                asyncFailed(t);
+										                }
+										                else
+										                {
+											                asyncCompleted(result);
+										                }
+									                }
+									               );
+									
+								}
+								
+							}
+					                     );
+				}
+			}.run();
+			updateUser(user, new Document("$inc", new Document("coins", -amount * EventProcessor.visitFactor)));
+			
+		}
+		catch (Throwable throwable)
+		{
+			throwable.printStackTrace();
+		}
+//			posts.findOneAndUpdate(Filters.and(Filters.eq("chatID", chatID), Filters.eq("messageID", messageID)),
+//			                       new Document()
+//			                       ).
+	}
+	
+	public Document nextPost (int userID) throws SuspendExecution, Throwable
+	{
+		AbstractMap.SimpleEntry entry = bachCursorMap.get(userID);
+		if (entry == null ||
+				System.currentTimeMillis() - (Long) entry.getValue() > TimeUnit.MINUTES.toMillis(10) ||
+				!((AsyncBatchCursor<Document>) entry.getKey()).isClosed())
+		
+		{
+			entry = new FiberAsync<AbstractMap.SimpleEntry<AsyncBatchCursor<Document>, Long>,
+					Throwable>()
+			{
+				
+				@Override
+				protected void requestAsync ()
+				{
+					FindIterable<Document> it = posts.find
+							(
+									not(elemMatch("views", and(eq("userID", userID), gt("time", System
+											.currentTimeMillis() - TimeUnit.DAYS.toMillis(2))))
+									   )
+							);
+					
+					it.batchCursor((r, t) ->
+					               {
+						               if (t != null)
+						               {
+							               asyncFailed(t);
+						               }
+						               else
+						               {
+							               asyncCompleted(new AbstractMap
+									               .SimpleEntry<AsyncBatchCursor<Document>, Long>(r,
+							                                                                      System
+									                                                                      .currentTimeMillis()
+							               ));
+						               }
+					               });
+					
+				}
+			}.run();
+			bachCursorMap.put(userID, entry);
+		}
+		entry = bachCursorMap.get(userID);
+		final AsyncBatchCursor<Document> cursor = (AsyncBatchCursor<Document>) entry.getKey();
+		cursor.setBatchSize(1);
+		List<Document> list = new FiberAsync<List<Document>, Throwable>()
+		{
+			@Override
+			protected void requestAsync ()
+			{
+				cursor.next((r, t) ->
+				            {
+					            if (t != null)
+					            {
+						            asyncFailed(t);
+					            }
+					            else
+					            {
+						            asyncCompleted(r);
+					            }
+				            });
+				
+			}
+		}.run();
+		Document doc = list.get(0);
+		return doc;
+	}
+	
+	public void confirmVisit (User from, Document temp)
+	{
+		long chatID = temp.getLong("chatID");
+		int messageID = temp.getInteger("chatID");
+		int userID = from.getId();
 	}
 }

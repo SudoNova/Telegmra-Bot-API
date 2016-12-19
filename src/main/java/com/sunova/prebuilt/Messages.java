@@ -16,10 +16,16 @@ public final class Messages
 	public static final String SEND_POST;
 	public static final String RETURN_TO_MAIN;
 	public static final String ENTER_AMOUNT_VISIT;
-	public static final String CONFIRM_VIEW;
+	public static final String CONFIRM_VIEW_ORDER;
 	public static final String AMOUNT_EXCEEDS;
 	public static final String YES;
 	public static final String NO;
+	public static final String REQUEST_DONE;
+	public static final String LOW_CREDITS;
+	public static final String NO_POSTS_NOW;
+	public static final String VIEW_AGAIN;
+	public static final String VIEW_NOTE;
+	public static final String VIEW_CONFIRMED;
 	
 	static
 	{
@@ -38,10 +44,17 @@ public final class Messages
 		RETURN_TO_MAIN = "انصراف و بازگشت به منوی اصلی";
 		ENTER_AMOUNT_VISIT = "لطفا تعداد بازدید " +
 				"مورد نظر را وارد کنید. هزینه هر بازدید دو سکه است.\n شما در حال حاضر {coins} سکه دارید.";
-		CONFIRM_VIEW = "شما قصد خرید {amount} بازدید به ارزش {value} سکه را دارید.\nآیا از سفارش خود امطمینان دارید؟";
+		CONFIRM_VIEW_ORDER = "شما قصد خرید {amount} بازدید به ارزش {value} سکه را دارید.\nآیا از سفارش خود اطمینان دارید؟";
 		AMOUNT_EXCEEDS = "مقدار سفارش داده شده از اعتبار حساب شما بیش‌تر است. لطفا مقدار کم‌تری وارد کنید.";
 		YES = "بله";
 		NO = "خیر";
+		REQUEST_DONE = "درخواست شما با موفقیت ثبت شد.";
+		LOW_CREDITS = "اعتبار شما برای سفارش کافی نیست. لطفا از " +
+				"طریق یکی از سه راه زیر اعتبار خود را افزایش دهید:\n۱- بازدید پست\n۲- عضویت در کانال\n۳- خرید سکه";
+		NO_POSTS_NOW = "در حال حاضر پستی جهت نمایش موجود نیست :(\n لطفا بعدا دوباره امتحان کنید.";
+		VIEW_AGAIN = "تایید و ادامه (موجودی: {coins} سکه)";
+		VIEW_CONFIRMED = "تایید و بازگشت به منوی اصلی";
+		VIEW_NOTE = "لطفا توجه کنید تا زمانی که بازدید را تایید نکنید سکه به حسابتان واریز نخواهد شد";
 //		}
 
 //		catch (UnsupportedEncodingException e)

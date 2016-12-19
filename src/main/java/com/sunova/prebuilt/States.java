@@ -12,5 +12,6 @@ public final class States
 	public static final int WAITING_FOR_POST = 5;
 	public static final int WAITING_FOR_CHANNEL = 8;
 	public static final int WAITING_FOR_AMOUNT = 6;
-	public static final int CONFIRM = 7;
+	public static final int CONFIRM_VIEW_ORDER = 7;
+	public static final int CONFIRM_VIEW_POST = 9;
 }

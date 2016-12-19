@@ -291,7 +291,7 @@ public class Message implements TObject
 		this.contact = contact;
 	}
 	
-	public ReplyKeyboardMarkup getReply_markup ()
+	public ReplyMarkup getReply_markup ()
 	{
 		return reply_markup;
 	}

@@ -59,6 +59,7 @@ public class JsonParser
 		}
 		catch (IOException e)
 		{
+			System.out.println(new String(input));
 			e.printStackTrace();
 		}
 		return null;

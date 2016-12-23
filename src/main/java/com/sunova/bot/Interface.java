@@ -2,7 +2,6 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
-import co.paralleluniverse.fibers.TrueThreadLocal;
 import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
 import org.apache.http.NameValuePair;
@@ -22,7 +21,6 @@ import java.util.*;
  */
 public class Interface
 {
-	private static final ThreadLocal<Chat> td = new TrueThreadLocal<>();
 	private static ArrayList<Interface> repos;
 	
 	static
@@ -71,7 +69,7 @@ public class Interface
 		return repos.get(serial);
 	}
 	
-	public Chat getChatID (String userName) throws SuspendExecution
+	public Chat getChatID (String userName) throws SuspendExecution, Result
 	{
 		List<NameValuePair> list = new ArrayList<>(3);
 		list.add(new BasicNameValuePair("chat_id", userName));
@@ -81,8 +79,15 @@ public class Interface
 			post.setURI(new URI(Transceiver.getPath() + "getChat"));
 			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
-			sendRequest(post);
-			return td.get();
+			Result result = sendRequest(post);
+			if (!result.isOk())
+			{
+				throw result;
+			}
+			else
+			{
+				return (Chat) result.getResult()[0];
+			}
 		}
 		catch (IOException | URISyntaxException e)
 		{
@@ -91,7 +96,7 @@ public class Interface
 		}
 	}
 	
-	public Chat getChatUserName (int chatID) throws SuspendExecution
+	public Chat getChatUserName (int chatID) throws SuspendExecution, Result
 	{
 		return getChatID(chatID + "");
 	}
@@ -133,7 +138,7 @@ public class Interface
 		requestReposLock.writeLock().unlock();
 		Result result = transceiver.execute(req);
 		return result;
-		//TODO decide
+		//TODO handle API framework side errors
 	}
 	
 	protected void processUpdate (Update update)
@@ -177,6 +182,11 @@ public class Interface
 	
 	void receiveResult (Result resultSet)
 	{
+		if (!resultSet.isOk())
+		{
+			System.err.println(resultSet.getDescription());
+			return;
+		}
 		for (TObject i : resultSet.getResult())
 		{
 			TObject object = i;
@@ -194,10 +204,6 @@ public class Interface
 //
 //				}
 //			}
-			else if (object instanceof Chat)
-			{
-				td.set((Chat) object);
-			}
 		}
 	}
 	
@@ -214,7 +220,7 @@ public class Interface
 		processor.shutDown();
 	}
 	
-	public int forwardMessage (Message message) throws SuspendExecution
+	public Result forwardMessage (Message message) throws SuspendExecution
 	{
 		try
 		{
@@ -236,13 +242,13 @@ public class Interface
 			post.setURI(new URI(Transceiver.getPath() + "forwardMessage"));
 			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
-			sendRequest(post);
+			return sendRequest(post);
 		}
 		catch (IOException | URISyntaxException e)
 		{
 			e.printStackTrace();
 		}
-		return 0; //TODO add status code
+		return null; //TODO add status code
 	}
 	
 	private class Servant extends Fiber<Void>

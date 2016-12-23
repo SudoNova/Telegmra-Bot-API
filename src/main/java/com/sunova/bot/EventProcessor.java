@@ -54,6 +54,7 @@ public class EventProcessor extends Fiber<Void>
 			{
 				doc = dbDriver.insertUser(from);
 			}
+			System.out.println(doc.getInteger("coins"));
 			switch (doc.getInteger("state"))
 			{
 				case States.START:
@@ -112,8 +113,7 @@ public class EventProcessor extends Fiber<Void>
 					}
 					else if (choice.equals(Messages.VIEW_POSTS))
 					{
-						Document newDoc = dbDriver.nextPost(from.getId());
-						goToNextPost(message, from, doc, newDoc);
+						goToNextPost(message, from, doc);
 					}
 					//TODO other choices
 				}
@@ -123,17 +123,17 @@ public class EventProcessor extends Fiber<Void>
 					String choice = message.getText();
 					if (choice != null)
 					{
-						if (choice.equals(Messages.VIEW_AGAIN.replace("{coins}", doc.getInteger("coins") + "")))
+						if (choice.contains(Messages.VIEW_AGAIN.substring(0, 14)))
 						{
 							int postReqID = doc.getInteger("temp");
 							doc = dbDriver.confirmVisit(from, postReqID);
-							Document newDoc = dbDriver.nextPost(from.getId());
-							goToNextPost(message, from, doc, newDoc);
+							goToNextPost(message, from, doc);
 						}
-						else if (choice.equals(Messages.CONFIRM_VIEW_ORDER))
+						else if (choice.equals(Messages.VIEW_CONFIRMED))
 						{
 							int postReqID = doc.getInteger("temp");
 							dbDriver.confirmVisit(from, postReqID);
+							sendStateMessage(States.MAIN_MENU, message, from);
 							goToState(from, States.MAIN_MENU);
 						}
 					}
@@ -175,13 +175,30 @@ public class EventProcessor extends Fiber<Void>
 					}
 					if (!(chatID == null || messageID == null))
 					{
-						message.setText(Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
-						message.setReply_markup(Keyboards.ENTER_INPUT);
-						botInterface.sendMessage(message);
-						Document newDoc = new Document("$set", new Document("state", States.WAITING_FOR_AMOUNT).append
-								("previous_state", States.WAITING_FOR_POST).append("temp", Arrays
-								.asList(chatID, messageID)));
-						dbDriver.updateUser(from, newDoc);
+						Chat forwardChat = new Chat();
+						forwardChat.setId(chatID);
+						message.setForward_from_chat(forwardChat);
+						message.setForward_from_message_id(messageID);
+						Result result = botInterface.forwardMessage(message);
+						if (result.isOk())
+						{
+							message.setText(
+									Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
+							message.setReply_markup(Keyboards.ENTER_INPUT);
+							botInterface.sendMessage(message);
+							Document newDoc = new Document("$set",
+							                               new Document("state", States.WAITING_FOR_AMOUNT).append
+									                               ("previous_state", States.WAITING_FOR_POST)
+									                               .append("temp", Arrays
+											                               .asList(chatID, messageID))
+							);
+							dbDriver.updateUser(from, newDoc);
+						}
+						else
+						{
+							message.setText(Messages.INVALID_POST);
+							botInterface.sendMessage(message);
+						}
 					}
 				}
 				break;
@@ -269,34 +286,42 @@ public class EventProcessor extends Fiber<Void>
 		}
 	}
 	
-	private void goToNextPost (Message message, User from, Document doc, Document newDoc) throws SuspendExecution,
+	private void goToNextPost (Message message, User from, Document doc) throws SuspendExecution,
 			Throwable
 	{
+		Document newDoc = dbDriver.nextPost(from.getId());
 		if (newDoc != null)
 		{
-			Message post = new Message();
-			Chat chat = new Chat();
-			chat.setId(newDoc.getLong("chatID"));
-			post.setForward_from_chat(chat);
-			post.setForward_from_message_id(newDoc.getInteger("messageID"));
 			ReplyKeyboardMarkup keyboard = Keyboards.CONFIRM_VIEW;
 			keyboard.getKeyboard()[0][0].setText(keyboard.getKeyboard()[0][0].getText().replace
 					("{coins}", doc.getInteger("coins") + ""));
 			message.setText(Messages.VIEW_NOTE);
 			message.setReply_markup(keyboard);
 			botInterface.sendMessage(message);
-			post.setChat(message.getChat());
-			botInterface.forwardMessage(post);
+			Chat chat = new Chat();
+			chat.setId(newDoc.getLong("chatID"));
+			message.setForward_from_chat(chat);
+			message.setForward_from_message_id(newDoc.getInteger("messageID"));
 			Document orders = (Document) newDoc.get(
 					"orders", List.class).get(0);
-			Document updateDoc = new Document("temp", orders.getInteger("postReqID"));
-			goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
+			Result result = botInterface.forwardMessage(message);
+			if (result.isOk())
+			{
+				Document updateDoc = new Document("temp", orders.getInteger("postReqID"));
+				goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
+			}
+			else
+			{
+				dbDriver.errorSendingPost(orders.getInteger("postReqID"));
+				goToNextPost(message, from, doc);
+				//TODO finalize order
+			}
 		}
 		else
 		{
 			message.setText(Messages.NO_POSTS_NOW);
-			message.setReply_markup(Keyboards.MAIN_MENU);
 			botInterface.sendMessage(message);
+			sendStateMessage(States.MAIN_MENU, message, from);
 			goToState(from, States.MAIN_MENU);
 		}
 	}

@@ -3,7 +3,7 @@ package org.telegram.objects;
 /**
  * Created by HellScre4m on 5/4/2016.
  */
-public class Result
+public class Result extends Throwable
 {
 	private TObject[] result;
 	private boolean ok;
@@ -40,7 +40,7 @@ public class Result
 		this.result = result;
 	}
 	
-	public boolean getOk ()
+	public boolean isOk ()
 	{
 		return ok;
 	}
@@ -50,4 +50,9 @@ public class Result
 		this.ok = ok;
 	}
 	
+	@Override
+	public String getMessage ()
+	{
+		return description;
+	}
 }

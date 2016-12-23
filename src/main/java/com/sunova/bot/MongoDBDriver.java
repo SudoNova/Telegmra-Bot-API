@@ -256,10 +256,38 @@ public class MongoDBDriver
 		dbClient.close();
 	}
 	
+	public void errorSendingPost (int postReqID) throws SuspendExecution, Throwable
+	{
+		new FiberAsync<UpdateResult, Throwable>()
+		{
+			
+			@Override
+			protected void requestAsync ()
+			{
+				posts.updateOne(
+						elemMatch("orders", eq("postReqID", postReqID)), new Document("$inc", new Document
+								("errorCount", 1)),
+						(r, t) ->
+						{
+							if (t != null)
+							{
+								asyncFailed(t);
+							}
+							else
+							{
+								asyncCompleted(r);
+							}
+						}
+				               );
+			}
+		};
+		
+	}
+	
 	public void insertNewPostViewOrder (User user, long chatID, int messageID, int amount)
 			throws SuspendExecution, Throwable
 	{
-		Document result = new FiberAsync<Document, Throwable>()
+		new FiberAsync<Document, Throwable>()
 		{
 			@Override
 			protected void requestAsync ()
@@ -270,36 +298,32 @@ public class MongoDBDriver
 								"$inc", new Document("postReqID", 1)),
 						new FindOneAndUpdateOptions().upsert(true)
 								.returnDocument(ReturnDocument.AFTER),
-						new SingleResultCallback<Document>()
+						(result, t) ->
 						{
-							@Override
-							public void onResult (Document result, Throwable t)
-							{
-								int postReqId = result.getInteger("postReqID");
-								long time = System.currentTimeMillis();
-								Document newDoc = new Document("postReqID", postReqId)
-										.append("ownerID", user.getId()).append("amount", amount)
-										.append("visits", 0)
-										.append("time", time);
-								posts.updateOne(
-										and(eq("chatID", chatID), eq("messageID", messageID)), new
-												Document("$push", new Document("orders", newDoc)), new
-												UpdateOptions().upsert
-												(true), (rr,
-										                 tt) ->
+							int postReqId = result.getInteger("postReqID");
+							long time = System.currentTimeMillis();
+							Document newDoc = new Document("postReqID", postReqId)
+									.append("ownerID", user.getId()).append("amount", amount)
+									.append("visits", 0)
+									.append("time", time)
+									.append("errorCount", 0);
+							posts.updateOne(
+									and(eq("chatID", chatID), eq("messageID", messageID)), new
+											Document("$push", new Document("orders", newDoc)), new
+											UpdateOptions().upsert
+											(true), (rr,
+									                 tt) ->
+									{
+										if (t != null)
 										{
-											if (t != null)
-											{
-												asyncFailed(t);
-											}
-											else
-											{
-												asyncCompleted(result);
-											}
+											asyncFailed(t);
 										}
-								               );
-								
-							}
+										else
+										{
+											asyncCompleted(result);
+										}
+									}
+							               );
 							
 						}
 				                     );
@@ -334,7 +358,8 @@ public class MongoDBDriver
 											      gt("amount", 0),
 											      lt("time", System
 													      .currentTimeMillis() - TimeUnit.DAYS
-													      .toMillis(1))
+													      .toMillis(1)),
+											      lt("errorCount", 10)
 									         )
 									     )
 							            )

@@ -48,7 +48,7 @@ public final class Keyboards
 		ENTER_INPUT = new ReplyKeyboardMarkup();
 		buttons = new KeyboardButton[1][1];
 		button = buttons[0][0] = new KeyboardButton();
-		button.setText("انصراف و بازگشت به منوی قبلی");
+		button.setText(Messages.RETURN_TO_MAIN);
 		ENTER_INPUT.setKeyboard(buttons);
 		ENTER_INPUT.setResize_keyboard(true);
 		

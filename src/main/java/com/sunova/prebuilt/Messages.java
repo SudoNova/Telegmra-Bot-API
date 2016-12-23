@@ -26,6 +26,7 @@ public final class Messages
 	public static final String VIEW_AGAIN;
 	public static final String VIEW_NOTE;
 	public static final String VIEW_CONFIRMED;
+	public static final String INVALID_POST;
 	
 	static
 	{
@@ -55,6 +56,7 @@ public final class Messages
 		VIEW_AGAIN = "تایید و ادامه (موجودی: {coins} سکه)";
 		VIEW_CONFIRMED = "تایید و بازگشت به منوی اصلی";
 		VIEW_NOTE = "لطفا توجه کنید تا زمانی که بازدید را تایید نکنید سکه به حسابتان واریز نخواهد شد";
+		INVALID_POST = "لینکی که ارسال نمودید اشتباه است";
 //		}
 
 //		catch (UnsupportedEncodingException e)

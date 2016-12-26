@@ -50,7 +50,7 @@ public class JsonParser
 		{
 			{
 				Result results = resultReader.readValue(input);
-				if (!results.getOk())
+				if (!results.isOk())
 				{
 					System.err.println(new String(input));
 				}

@@ -44,25 +44,18 @@ public class JsonParser
 		return instance;
 	}
 	
-	public Result parseResult (byte[] input)
+	public Result parseResult (byte[] input) throws IOException
 	{
-		try
+		
+		
+		Result results = resultReader.readValue(input);
+		if (!results.isOk())
 		{
-			{
-				Result results = resultReader.readValue(input);
-				if (!results.isOk())
-				{
-					System.err.println(new String(input));
-				}
-				return results;
-			}
+			System.err.println(new String(input));
 		}
-		catch (IOException e)
-		{
-			System.out.println(new String(input));
-			e.printStackTrace();
-		}
-		return null;
+		return results;
+		
+		
 	}
 	
 	public Update parseUpdate (byte[] input)
@@ -123,7 +116,7 @@ public class JsonParser
 			}
 			else if (tree.has("id"))
 			{
-				System.out.println("user");
+//				System.out.println("user");
 				resultValue = p.getCodec().treeToValue(tree, User.class);
 			}
 			else

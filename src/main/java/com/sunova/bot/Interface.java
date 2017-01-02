@@ -28,7 +28,6 @@ public class Interface
 		repos = new ArrayList<>(5);
 	}
 	
-	User bot;
 	Transceiver transceiver;
 	/**
 	 * Repository for incoming updates
@@ -47,8 +46,9 @@ public class Interface
 	private EventProcessor processor;
 	
 	
-	private Interface ()
+	private Interface (Launcher launcher)
 	{
+		transceiver = Transceiver.getInstance(launcher);
 		updateRepos = new HashMap<>();
 		requestRepos = new HashMap<>();
 		
@@ -64,7 +64,7 @@ public class Interface
 		int serial = launcher.serialNumber;
 		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			repos.add(serial, new Interface());
+			repos.add(serial, new Interface(launcher));
 		}
 		return repos.get(serial);
 	}

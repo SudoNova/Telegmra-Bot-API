@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -48,11 +49,10 @@ public class Launcher
 	String token;
 	int serialNumber;
 	boolean shutDown;
-	private String certPath;
-	private File publicKey;
-	private File privateKey;
-	private File certificate;
-	private String webhookURL;
+	String certPath;
+	X509Certificate cert;
+	PrivateKey privateKey;
+	String webhookURL;
 	private Interface botInterface;
 	private WebHook webHook;
 	private Transceiver transceiver;
@@ -78,10 +78,11 @@ public class Launcher
 	
 	public static void main (String[] args) throws SuspendExecution, IOException
 	{
-		System.setProperty("Dco.paralleluniverse.fibers.verifyInstrumentation", "true");
+//		System.setProperty("Dco.paralleluniverse.fibers.verifyInstrumentation", "true");
+		System.setProperty("Dhttps.protocols", "TLSv1.1,TLSv1.2");
 		Launcher instance = createInstance();
 		String certPath = System.getProperty("user.dir") + "\\Cert\\";
-		String token = "325007578:AAGtjbSwiMBG0YprvX2zbaXnl10fALoWBkw";
+		String token = "304376707:AAGug5ec_opFf6IkTBZLG3X32nkCFgE_C-I";
 		String domainAddress = "sunova.dynu.com";
 		instance.setBotToken(token).setCertPath(certPath).setDomainAddress(domainAddress).build();
 		
@@ -102,14 +103,7 @@ public class Launcher
 		{
 			System.err.println("Specify bot token to via setBotToken()");
 		}
-		try
-		{
-			init();
-		}
-		catch (SuspendExecution e)
-		{
-			
-		}
+		init();
 		return this;
 	}
 	
@@ -131,12 +125,12 @@ public class Launcher
 		return this;
 	}
 	
-	private void init () throws SuspendExecution
+	private void init ()
 	{
 		//		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
-		File certFile = new File(certPath + "cert.pem");
 		try
 		{
+			File certFile = new File(certPath + "cert.pem");
 			if (!certFile.exists())
 			{
 				generateCert();
@@ -145,6 +139,7 @@ public class Launcher
 			{
 				Scanner reader = new Scanner(certFile);
 				StringBuilder bd = new StringBuilder();
+//				bd.append("-----BEGIN CERTIFICATE-----\n");
 				while (reader.hasNextLine())
 				{
 					String line = reader.nextLine();
@@ -153,10 +148,12 @@ public class Launcher
 						bd.append(line.concat("\n"));
 					}
 				}
-				byte[] buffer = bd.toString().getBytes();
 				reader.close();
-				X509CertificateHolder cert = new X509CertificateHolder(org.bouncycastle.util.encoders.Base64.decode
+//				bd.append("-----END CERTIFICATE-----");
+				byte[] buffer = bd.toString().getBytes();
+				X509CertificateHolder holder = new X509CertificateHolder(org.bouncycastle.util.encoders.Base64.decode
 						(buffer));
+				cert = new JcaX509CertificateConverter().getCertificate(holder);
 				Date date = new Date();
 				if (date.after(cert.getNotAfter()))
 				{
@@ -164,19 +161,34 @@ public class Launcher
 				}
 				else
 				{
-					System.out.println(cert.getNotAfter());
+					File privateKeyFile = new File(certPath + "privateKey.pem");
+					reader = new Scanner(privateKeyFile);
+					bd = new StringBuilder();
+					while (reader.hasNextLine())
+					{
+						String line = reader.nextLine();
+						bd.append(line.concat("\n"));
+					}
+					buffer = bd.toString().getBytes();
+					reader.close();
+					PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(
+							org.bouncycastle.util.encoders.Base64.decode(buffer));
+					KeyFactory kf = KeyFactory.getInstance("RSA");
+					privateKey = kf.generatePrivate(spec);
+					System.out.println("Certificate expiration date: " + holder.getNotAfter());
 				}
-				publicKey = new File(certPath + "publicKey.pem");
-				privateKey = new File(certPath + "privateKey.pem");
-				certificate = certFile;
 			}
 		}
 		catch (Exception e)
 		{
 			e.printStackTrace();
 		}
-		transceiver = Transceiver.getInstance(this);
+		webhookURL = "https://" + domainAddress + ":" + WebHook.serverPort +
+				"/" +
+				token +
+				"/";
 		webHook = WebHook.getInstance(this);
+		transceiver = Transceiver.getInstance(this);
 		botInterface = Interface.getInstance(this);
 		requestHandler = new ServantFiber();
 		requestHandler.option = requestHandler.INIT;
@@ -211,21 +223,6 @@ public class Launcher
 		}
 	}
 	
-	File getPublicKey ()
-	{
-		return publicKey;
-	}
-	
-	File getCertificate ()
-	{
-		return certificate;
-	}
-	
-	File getPrivateKey ()
-	{
-		return privateKey;
-	}
-	
 	private void generateCert ()
 	{
 		System.out.println("generating");
@@ -239,9 +236,7 @@ public class Launcher
 		Date endDate = new Date(cal.getTime().getTime());
 		int serialNumber = ("https://api.telegram.org/bot" + token + "/").hashCode();
 		KeyPair pair;
-		PrivateKey privateKey;
 		PublicKey publicKey;
-		X509Certificate cert;
 		X500NameBuilder nameBuilder = new X500NameBuilder();
 		nameBuilder.addRDN(BCStyle.CN, domainAddress);
 		nameBuilder.addRDN(BCStyle.O, "SuNova LLP");
@@ -262,7 +257,8 @@ public class Launcher
 			X509v3CertificateBuilder builder = new X509v3CertificateBuilder(subjectDN,
 			                                                                new BigInteger(serialNumber + ""),
 			                                                                startDate, endDate, subjectDN,
-			                                                                publicKeyInfo);
+			                                                                publicKeyInfo
+			);
 			ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").setProvider("BC").build(privateKey);
 			cert = new JcaX509CertificateConverter().getCertificate(builder.build(signer));
 			
@@ -278,9 +274,9 @@ public class Launcher
 			file = new File(certPath + "publicKey.pem");
 			file.createNewFile();
 			writer = new FileWriter(file);
-			writer.write("-----BEGIN PUBLIC KEY-----\n");
+//			writer.write("-----BEGIN PUBLIC KEY-----\n");
 			writer.write(new String(encoder.encode(publicKey.getEncoded())));
-			writer.write("-----END PUBLIC KEY-----");
+//			writer.write("-----END PUBLIC KEY-----");
 			writer.close();
 			
 			file = new File(certPath + "cert.pem");
@@ -299,6 +295,19 @@ public class Launcher
 		
 	}
 	
+	static X509Certificate[] getBotsCertificates ()
+	{
+		int size = serialNumberTracker.get();
+		X509Certificate[] result = new X509Certificate[size];
+		for (int i = 0; i < size; i++)
+		{
+			result[i] = launcherRepos.get(i).cert;
+		}
+		return result;
+		
+	}
+	
+	@Deprecated
 	class ServantFiber extends Fiber<Void>
 	{
 		public final byte INIT = 1;
@@ -317,20 +326,15 @@ public class Launcher
 			return null;
 		}
 		
+		//TODO remove handlerFiber and make called methods thread callable
+		@Deprecated
 		private void handle () throws SuspendExecution, InterruptedException
 		{
 			switch (option)
 			{
 				case INIT:
-					transceiver.botInterface = botInterface;
-					transceiver.init();
-					botInterface.transceiver = transceiver;
-					botInterface.bot = transceiver.bot;
+					break;
 				case SET_WEBHOOK:
-					webhookURL = "https://" + domainAddress + ":" + WebHook.serverPort +
-							"/" +
-							token +
-							"/";
 					transceiver.enableWebhook(webhookURL);
 					break;
 				case DISABLE_WEBHOOK:

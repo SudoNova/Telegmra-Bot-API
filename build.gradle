@@ -23,6 +23,7 @@ configurations {
 }
 
 dependencies {
+    compile 'org.apache.httpcomponents:httpasyncclient:4.1.2'
     compile 'org.mongodb:mongodb-driver-async:3.4.0'
     compile 'com.fasterxml.jackson.core:jackson-annotations:2.8.5'
     compile 'co.paralleluniverse:quasar-core:0.7.7:jdk8'

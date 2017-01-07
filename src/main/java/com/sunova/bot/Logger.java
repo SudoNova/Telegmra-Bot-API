@@ -1,9 +1,21 @@
 package com.sunova.bot;
 
+import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.TrueThreadLocal;
+import co.paralleluniverse.fibers.io.FiberFileChannel;
+import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
+import org.telegram.objects.Chat;
+import org.telegram.objects.Document;
+import org.telegram.objects.Message;
+import org.telegram.objects.Result;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.LinkedList;
 
@@ -13,15 +25,16 @@ import java.util.LinkedList;
 public class Logger
 {
 	private static final Logger instance;
-	private HashMap<Integer, LinkedList<char[]>> loggerMap;
-	private static final ThreadLocal<Integer> logID;
+	private static final ThreadLocal<Long> logID;
+	private static final HashMap<Long, LinkedList<char[]>> loggerMap;
 	private static final ReentrantReadWriteLock mapLock;
 	private final static ThreadLocal<StringBuilder> buffer;
-	private final static char[] INFO = "INFO".toCharArray();
-	private final static char[] TRACE = "TRACE".toCharArray();
-	private final static char[] DEBUG = "DEBUG".toCharArray();
-	private final static char[] WARNING = "WARNING".toCharArray();
-	private final static char[] ERROR = "ERROR".toCharArray();
+	private final static String INFO = "INFO";
+	private final static String TRACE = "TRACE";
+	private final static String DEBUG = "DEBUG";
+	private final static String WARNING = "WARNING";
+	private final static String ERROR = "ERROR";
+	private static boolean shutDown;
 	
 	private enum LEVEL
 	{
@@ -34,17 +47,36 @@ public class Logger
 		logID = new TrueThreadLocal<>();
 		buffer = new ThreadLocal<>();
 		mapLock = new ReentrantReadWriteLock();
-	}
-	
-	private Logger ()
-	{
 		loggerMap = new HashMap<>();
 	}
 	
-	public Logger getInstance (int logID)
+	public static Logger getInstance ()
 	{
-		Logger.logID.set(logID);
-		buffer.set(new StringBuilder());
+		return getInstance(null);
+	}
+	
+	public static Logger getInstance (Long ancestorID)
+	{
+		Long ID = Strand.currentStrand().getId();
+		if (logID.get() == null)
+		{
+			Logger.logID.set(ID);
+			buffer.set(new StringBuilder());
+			mapLock.writeLock().lock();
+			LinkedList<char[]> list;
+			if (ancestorID != null)
+			{
+				list = loggerMap.get(ancestorID);
+				list = new LinkedList<>(list);
+			}
+			else
+			{
+				list = new LinkedList<>();
+			}
+			loggerMap.put(ID, list);
+			mapLock.writeLock().unlock();
+			
+		}
 		return instance;
 	}
 	
@@ -80,19 +112,19 @@ public class Logger
 		switch (level)
 		{
 			case INFO:
-				builder.append(INFO);
+				builder.append(INFO + ": ");
 				break;
 			case DEBUG:
-				builder.append(DEBUG);
+				builder.append(DEBUG + ": ");
 				break;
 			case WARNING:
-				builder.append(WARNING);
+				builder.append(WARNING + ": ");
 				break;
 			case ERROR:
-				builder.append(ERROR);
+				builder.append(ERROR + ": ");
 				break;
 			case TRACE:
-				builder.append(TRACE);
+				builder.append(TRACE + ": ");
 		}
 		
 		for (Object i : obj)
@@ -107,7 +139,7 @@ public class Logger
 				{
 					builder.append((String) (i.getClass().getDeclaredMethod(
 							"toString", String.class).invoke(
-							i, null)));
+							i, (Object) null)));
 				}
 				catch (Exception e)
 				{
@@ -118,30 +150,57 @@ public class Logger
 		mapLock.readLock().lock();
 		LinkedList<char[]> list = loggerMap.get(logID.get());
 		mapLock.readLock().unlock();
-		if (list != null)
-		{
-			list.add(builder.toString().toCharArray());
-		}
-		else
-		{
-			list = new LinkedList<>();
-			list.add(builder.toString().toCharArray());
-			mapLock.writeLock().lock();
-			loggerMap.put(logID.get(), list);
-			mapLock.writeLock().lock();
-		}
+		list.add(builder.toString().toCharArray());
 		
 	}
 	
-	public File dump (Integer adminUserID)
+	public File dumpAndSend (Long adminUserID, Bot bot) throws SuspendExecution, IOException, Result
 	{
-		//TODO add body
-		throw new UnsupportedOperationException();
+		File file = dump(bot);
+		Document doc = new Document().setFile(file);
+		Message message = new Message().setChat(new Chat().setId(adminUserID)).setDocument(doc);
+		message.setCaption(file.getName());
+		bot.getInterface().sendMessage(message);
+		return file;
 	}
 	
-	public File dump ()
+	public File dump (Bot bot) throws SuspendExecution, IOException
 	{
-		dump(null);
-		throw new UnsupportedOperationException();
+		StringBuilder builder = buffer.get();
+		builder.setLength(0);
+		long ID = logID.get();
+		mapLock.writeLock().lock();
+		LinkedList<char[]> list = loggerMap.remove(ID);
+		mapLock.writeLock().unlock();
+		for (char[] i : list)
+		{
+			builder.append(i);
+		}
+		byte[] log = builder.toString().getBytes("UTF-8");
+		Path path = FileSystems
+				.getDefault()
+				.getPath(bot.resourcesPath + "logs\\" + "log-" + System.currentTimeMillis() + ".txt");
+		
+		FiberFileChannel channel = FiberFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		ByteBuffer buffer = ByteBuffer.wrap(log);
+		try
+		{
+			channel.write(buffer);
+		}
+		catch (Throwable throwable)
+		{
+			if (throwable instanceof IOException)
+			{
+				throw (IOException) throwable;
+			}
+			else
+			{
+				throwable.printStackTrace();
+			}
+		}
+		return path.toFile();
+//		return file;
 	}
+	
+	
 }

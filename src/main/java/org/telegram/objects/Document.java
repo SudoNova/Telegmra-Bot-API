@@ -1,5 +1,7 @@
 package org.telegram.objects;
 
+import java.io.File;
+
 /**
  * Created by HellScre4m on 12/9/2016.
  */
@@ -10,6 +12,19 @@ public class Document implements TObject
 	private String mime_type;
 	private int file_size;
 	private PhotoSize thumb;
+	private File file;
+	private String file_path;
+	
+	public File getFile ()
+	{
+		return file;
+	}
+	
+	public Document setFile (File file)
+	{
+		this.file = file;
+		return this;
+	}
 	
 	public String getFile_id ()
 	{
@@ -59,5 +74,15 @@ public class Document implements TObject
 	public void setThumb (PhotoSize thumb)
 	{
 		this.thumb = thumb;
+	}
+	
+	public String getFile_path ()
+	{
+		return file_path;
+	}
+	
+	public void setFile_path (String file_path)
+	{
+		this.file_path = file_path;
 	}
 }

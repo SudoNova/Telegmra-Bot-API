@@ -56,6 +56,7 @@ public class Bot
 	private Interface botInterface;
 	private WebHook webHook;
 	private Transceiver transceiver;
+	EventProcessor eventProcessor;
 	private ServantFiber requestHandler;
 	
 	private Bot ()
@@ -83,7 +84,9 @@ public class Bot
 		Bot instance = createInstance();
 		String token = "304376707:AAGug5ec_opFf6IkTBZLG3X32nkCFgE_C-I";
 		String domainAddress = "sunova.dynu.com";
-		instance.setBotToken(token).setDomainAddress(domainAddress).build();
+		EventProcessor processor = new EventProcessor();
+		instance.setBotToken(token).setDomainAddress(domainAddress)
+				.setEventProcessor(processor).build();
 		
 	}
 	
@@ -105,14 +108,28 @@ public class Bot
 		if (domainAddress == null)
 		{
 			System.err.println("Specify domain address via setDomainAddress()");
+			return this;
 		}
 		if (token == null)
 		{
 			System.err.println("Specify bot token to via setBotToken()");
+			return this;
+		}
+		if (eventProcessor == null)
+		{
+			System.err.println("Please set an EventProcessor");
+			return this;
 		}
 		init();
 		return this;
 	}
+	
+	public Bot setEventProcessor (EventProcessor processor)
+	{
+		eventProcessor = processor;
+		return this;
+	}
+	
 	
 	public Bot setBotToken (String token)
 	{
@@ -128,6 +145,7 @@ public class Bot
 	
 	private void init ()
 	{
+		eventProcessor.setBot(this);
 		resourcesPath = System.getProperty("user.dir") + "\\resources\\" + token.replace(":", "_") + "\\";
 		File temp = new File(resourcesPath);
 		if (!temp.exists())
@@ -138,7 +156,6 @@ public class Bot
 		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
 		//May be added to a static constructor
 		try
-		
 		{
 			File certFile = new File(resourcesPath + "cert\\" + "cert.pem");
 			if (!certFile.exists())
@@ -200,9 +217,10 @@ public class Bot
 				"/" +
 				token +
 				"/";
-		webHook = WebHook.getInstance(this);
 		transceiver = Transceiver.getInstance(this);
 		botInterface = Interface.getInstance(this);
+		eventProcessor.setBot(this);
+		webHook = WebHook.getInstance(this);
 		requestHandler = new
 				
 				ServantFiber();

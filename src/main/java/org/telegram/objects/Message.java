@@ -46,9 +46,10 @@ public class Message implements TObject
 		return migrate_to_chat_id;
 	}
 	
-	public void setMigrate_to_chat_id (int migrate_to_chat_id)
+	public Message setMigrate_to_chat_id (int migrate_to_chat_id)
 	{
 		this.migrate_to_chat_id = migrate_to_chat_id;
+		return this;
 	}
 	
 	public int getMigrate_from_chat_id ()
@@ -56,9 +57,10 @@ public class Message implements TObject
 		return migrate_from_chat_id;
 	}
 	
-	public void setMigrate_from_chat_id (int migrate_from_chat_id)
+	public Message setMigrate_from_chat_id (int migrate_from_chat_id)
 	{
 		this.migrate_from_chat_id = migrate_from_chat_id;
+		return this;
 	}
 	
 	public boolean isDelete_chat_photo ()
@@ -66,9 +68,10 @@ public class Message implements TObject
 		return delete_chat_photo;
 	}
 	
-	public void setDelete_chat_photo (boolean delete_chat_photo)
+	public Message setDelete_chat_photo (boolean delete_chat_photo)
 	{
 		this.delete_chat_photo = delete_chat_photo;
+		return this;
 	}
 	
 	public boolean isGroup_chat_created ()
@@ -76,9 +79,10 @@ public class Message implements TObject
 		return group_chat_created;
 	}
 	
-	public void setGroup_chat_created (boolean group_chat_created)
+	public Message setGroup_chat_created (boolean group_chat_created)
 	{
 		this.group_chat_created = group_chat_created;
+		return this;
 	}
 	
 	public boolean isSupergroup_chat_created ()
@@ -86,9 +90,10 @@ public class Message implements TObject
 		return supergroup_chat_created;
 	}
 	
-	public void setSupergroup_chat_created (boolean supergroup_chat_created)
+	public Message setSupergroup_chat_created (boolean supergroup_chat_created)
 	{
 		this.supergroup_chat_created = supergroup_chat_created;
+		return this;
 	}
 	
 	public boolean isChannel_chat_created ()
@@ -96,9 +101,10 @@ public class Message implements TObject
 		return channel_chat_created;
 	}
 	
-	public void setChannel_chat_created (boolean channel_chat_created)
+	public Message setChannel_chat_created (boolean channel_chat_created)
 	{
 		this.channel_chat_created = channel_chat_created;
+		return this;
 	}
 	
 	public User getNew_chat_member ()
@@ -106,9 +112,10 @@ public class Message implements TObject
 		return new_chat_member;
 	}
 	
-	public void setNew_chat_member (User new_chat_member)
+	public Message setNew_chat_member (User new_chat_member)
 	{
 		this.new_chat_member = new_chat_member;
+		return this;
 	}
 	
 	public User getLeft_chat_member ()
@@ -116,9 +123,10 @@ public class Message implements TObject
 		return left_chat_member;
 	}
 	
-	public void setLeft_chat_member (User left_chat_member)
+	public Message setLeft_chat_member (User left_chat_member)
 	{
 		this.left_chat_member = left_chat_member;
+		return this;
 	}
 	
 	public Message getPinned_message ()
@@ -126,9 +134,10 @@ public class Message implements TObject
 		return pinned_message;
 	}
 	
-	public void setPinned_message (Message pinned_message)
+	public Message setPinned_message (Message pinned_message)
 	{
 		this.pinned_message = pinned_message;
+		return this;
 	}
 	
 	public String getNew_chat_title ()
@@ -136,9 +145,10 @@ public class Message implements TObject
 		return new_chat_title;
 	}
 	
-	public void setNew_chat_title (String new_chat_title)
+	public Message setNew_chat_title (String new_chat_title)
 	{
 		this.new_chat_title = new_chat_title;
+		return this;
 	}
 	
 	public PhotoSize[] getNew_chat_photo ()
@@ -146,9 +156,10 @@ public class Message implements TObject
 		return new_chat_photo;
 	}
 	
-	public void setNew_chat_photo (PhotoSize[] new_chat_photo)
+	public Message setNew_chat_photo (PhotoSize[] new_chat_photo)
 	{
 		this.new_chat_photo = new_chat_photo;
+		return this;
 	}
 	
 	public Venue getVenue ()
@@ -156,9 +167,10 @@ public class Message implements TObject
 		return venue;
 	}
 	
-	public void setVenue (Venue venue)
+	public Message setVenue (Venue venue)
 	{
 		this.venue = venue;
+		return this;
 	}
 	
 	public Location getLocation ()
@@ -166,9 +178,10 @@ public class Message implements TObject
 		return location;
 	}
 	
-	public void setLocation (Location location)
+	public Message setLocation (Location location)
 	{
 		this.location = location;
+		return this;
 	}
 	
 	public int getEdit_date ()
@@ -176,9 +189,10 @@ public class Message implements TObject
 		return edit_date;
 	}
 	
-	public void setEdit_date (int edit_date)
+	public Message setEdit_date (int edit_date)
 	{
 		this.edit_date = edit_date;
+		return this;
 	}
 	
 	public Voice getVoice ()
@@ -186,9 +200,10 @@ public class Message implements TObject
 		return voice;
 	}
 	
-	public void setVoice (Voice voice)
+	public Message setVoice (Voice voice)
 	{
 		this.voice = voice;
+		return this;
 	}
 	
 	public Video getVideo ()
@@ -196,9 +211,10 @@ public class Message implements TObject
 		return video;
 	}
 	
-	public void setVideo (Video video)
+	public Message setVideo (Video video)
 	{
 		this.video = video;
+		return this;
 	}
 	
 	public Sticker getSticker ()
@@ -206,9 +222,10 @@ public class Message implements TObject
 		return sticker;
 	}
 	
-	public void setSticker (Sticker sticker)
+	public Message setSticker (Sticker sticker)
 	{
 		this.sticker = sticker;
+		return this;
 	}
 	
 	public Game getGame ()
@@ -216,9 +233,10 @@ public class Message implements TObject
 		return game;
 	}
 	
-	public void setGame (Game game)
+	public Message setGame (Game game)
 	{
 		this.game = game;
+		return this;
 	}
 	
 	public String getCaption ()
@@ -226,9 +244,10 @@ public class Message implements TObject
 		return caption;
 	}
 	
-	public void setCaption (String caption)
+	public Message setCaption (String caption)
 	{
 		this.caption = caption;
+		return this;
 	}
 	
 	public Document getDocument ()
@@ -236,9 +255,10 @@ public class Message implements TObject
 		return document;
 	}
 	
-	public void setDocument (Document document)
+	public Message setDocument (Document document)
 	{
 		this.document = document;
+		return this;
 	}
 	
 	public Audio getAudio ()
@@ -246,9 +266,10 @@ public class Message implements TObject
 		return audio;
 	}
 	
-	public void setAudio (Audio audio)
+	public Message setAudio (Audio audio)
 	{
 		this.audio = audio;
+		return this;
 	}
 	
 	public PhotoSize[] getPhoto ()
@@ -256,9 +277,10 @@ public class Message implements TObject
 		return photo;
 	}
 	
-	public void setPhoto (PhotoSize[] photo)
+	public Message setPhoto (PhotoSize[] photo)
 	{
 		this.photo = photo;
+		return this;
 	}
 	
 	public int getForward_from_message_id ()
@@ -266,9 +288,10 @@ public class Message implements TObject
 		return forward_from_message_id;
 	}
 	
-	public void setForward_from_message_id (int forward_from_message_id)
+	public Message setForward_from_message_id (int forward_from_message_id)
 	{
 		this.forward_from_message_id = forward_from_message_id;
+		return this;
 	}
 	
 	public Chat getForward_from_chat ()
@@ -276,9 +299,10 @@ public class Message implements TObject
 		return forward_from_chat;
 	}
 	
-	public void setForward_from_chat (Chat forward_from_chat)
+	public Message setForward_from_chat (Chat forward_from_chat)
 	{
 		this.forward_from_chat = forward_from_chat;
+		return this;
 	}
 	
 	public Contact getContact ()
@@ -286,9 +310,10 @@ public class Message implements TObject
 		return contact;
 	}
 	
-	public void setContact (Contact contact)
+	public Message setContact (Contact contact)
 	{
 		this.contact = contact;
+		return this;
 	}
 	
 	public ReplyMarkup getReply_markup ()
@@ -296,9 +321,10 @@ public class Message implements TObject
 		return reply_markup;
 	}
 	
-	public void setReply_markup (ReplyKeyboardMarkup reply_markup)
+	public Message setReply_markup (ReplyKeyboardMarkup reply_markup)
 	{
 		this.reply_markup = reply_markup;
+		return this;
 	}
 	
 	public MessageEntity[] getEntities ()
@@ -306,23 +332,21 @@ public class Message implements TObject
 		return entities;
 	}
 	
-	public void setEntities (MessageEntity[] entities)
+	public Message setEntities (MessageEntity[] entities)
 	{
 		this.entities = entities;
+		return this;
 	}
-
-//	private
-// TODO Add other fields.
-	//TODO this class needs to be completed.
 	
 	public Chat getChat ()
 	{
 		return chat;
 	}
 	
-	public void setChat (Chat chat)
+	public Message setChat (Chat chat)
 	{
 		this.chat = chat;
+		return this;
 	}
 	
 	public String getText ()
@@ -330,9 +354,10 @@ public class Message implements TObject
 		return text;
 	}
 	
-	public void setText (String text)
+	public Message setText (String text)
 	{
 		this.text = text;
+		return this;
 	}
 	
 	public Message getReply_to_message ()
@@ -340,9 +365,10 @@ public class Message implements TObject
 		return reply_to_message;
 	}
 	
-	public void setReply_to_message (Message reply_to_message)
+	public Message setReply_to_message (Message reply_to_message)
 	{
 		this.reply_to_message = reply_to_message;
+		return this;
 	}
 	
 	public int getMessage_id ()
@@ -350,9 +376,10 @@ public class Message implements TObject
 		return message_id;
 	}
 	
-	public void setMessage_id (int message_id)
+	public Message setMessage_id (int message_id)
 	{
 		this.message_id = message_id;
+		return this;
 	}
 	
 	public User getFrom ()
@@ -360,9 +387,10 @@ public class Message implements TObject
 		return from;
 	}
 	
-	public void setFrom (User from)
+	public Message setFrom (User from)
 	{
 		this.from = from;
+		return this;
 	}
 	
 	public User getForward_from ()
@@ -370,9 +398,10 @@ public class Message implements TObject
 		return forward_from;
 	}
 	
-	public void setForward_from (User forward_from)
+	public Message setForward_from (User forward_from)
 	{
 		this.forward_from = forward_from;
+		return this;
 	}
 	
 	public int getForward_date ()
@@ -380,9 +409,10 @@ public class Message implements TObject
 		return forward_date;
 	}
 	
-	public void setForward_date (int forward_date)
+	public Message setForward_date (int forward_date)
 	{
 		this.forward_date = forward_date;
+		return this;
 	}
 	
 	public int getDate ()
@@ -390,9 +420,10 @@ public class Message implements TObject
 		return date;
 	}
 	
-	public void setDate (int date)
+	public Message setDate (int date)
 	{
 		this.date = date;
+		return this;
 	}
 	
 }

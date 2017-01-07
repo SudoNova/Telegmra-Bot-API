@@ -20,10 +20,11 @@ public class JsonParser
 	private ObjectReader resultReader;
 	private ObjectWriter TObjectWriter;
 	private ObjectWriter KeyboardButtonWriter;
+	private ObjectMapper mapper;
 	
 	private JsonParser ()
 	{
-		ObjectMapper mapper = new ObjectMapper();
+		mapper = new ObjectMapper();
 		SimpleModule module = new SimpleModule();
 		mapper.enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
 		module.addDeserializer(TObject.class, new TObjectDeserializer());
@@ -44,14 +45,30 @@ public class JsonParser
 		return instance;
 	}
 	
-	public Result parseResult (byte[] input) throws IOException
+	public Result parseResult (byte[] input) throws IOException, Result
 	{
-		
-		
-		Result results = resultReader.readValue(input);
-		if (!results.isOk())
+		Result results = null;
+		try
 		{
-			System.err.println(new String(input));
+			results = resultReader.readValue(input);
+			if (!results.isOk())
+			{
+				System.err.println(new String(input));
+			}
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+			System.out.println(new String(input));
+			try
+			{
+				throw mapper.readValue(input, Result.class);
+			}
+			catch (Result result)
+			{
+				throw result;
+			}
+			
 		}
 		return results;
 		
@@ -97,12 +114,10 @@ public class JsonParser
 			TObject resultValue = null;
 			if (tree.has("update_id"))
 			{
-//				System.out.println("update");
 				resultValue = p.getCodec().treeToValue(tree, Update.class);
 			}
 			else if (tree.has("message_id"))
 			{
-//				System.out.println("message");
 				resultValue = p.getCodec().treeToValue(tree, Message.class);
 			}
 			else if (tree.has("title"))
@@ -111,12 +126,10 @@ public class JsonParser
 			}
 			else if (tree.has("message_entity"))
 			{
-//				System.out.println("Message Entitiy");
 				resultValue = p.getCodec().treeToValue(tree.get("message_entity"), MessageEntity.class);
 			}
 			else if (tree.has("id"))
 			{
-//				System.out.println("user");
 				resultValue = p.getCodec().treeToValue(tree, User.class);
 			}
 			else
@@ -164,6 +177,11 @@ public class JsonParser
 				{
 					gen.writeBooleanField("request_location", true);
 				}
+			}
+			else
+			{
+				Class valueClass = value.getClass();
+				gen.writeObject((valueClass.cast(value)));
 			}
 //			else if (value instanceof Message)
 //			{

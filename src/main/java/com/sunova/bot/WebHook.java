@@ -17,7 +17,7 @@ import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
-
+//TODO make it asynchronous and more flexible and use singleton pattern
 /**
  * Created by HellScre4m on 6/1/2016.
  */
@@ -31,22 +31,22 @@ public class WebHook
 		repos = new ArrayList<>(5);
 	}
 	
-	private Launcher launcher;
+	private Bot bot;
 	private ServerSocket serverSocket;
 	private Thread connectionAcceptor;
 	private boolean shutDown;
 	private Transceiver transceiver;
 	
-	private WebHook (Launcher launcher)
+	private WebHook (Bot bot)
 	{
 		try
 		{
-			this.launcher = launcher;
-			transceiver = Transceiver.getInstance(launcher);
+			this.bot = bot;
+			transceiver = Transceiver.getInstance(bot);
 			SSLContext context = SSLContext.getInstance("TLSv1.2");
 			
-			X509Certificate cert = launcher.cert;
-			PrivateKey privateKey = launcher.privateKey;
+			X509Certificate cert = bot.cert;
+			PrivateKey privateKey = bot.privateKey;
 			
 			KeyStore ks = KeyStore.getInstance("JKS");
 			ks.load(null);
@@ -95,7 +95,7 @@ public class WebHook
 					}
 				}
 			};
-			registry.register("/" + launcher.token + "/*", handler);
+			registry.register("/" + bot.token + "/*", handler);
 			HttpService httpService = new HttpService(processor, registry);
 			HttpConnectionFactory<DefaultBHttpServerConnection> connectionFactory =
 					DefaultBHttpServerConnectionFactory.INSTANCE;
@@ -175,12 +175,12 @@ public class WebHook
 		
 	}
 	
-	static WebHook getInstance (Launcher launcher)
+	static WebHook getInstance (Bot bot)
 	{
-		int serial = launcher.serialNumber;
+		int serial = bot.serialNumber;
 		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			repos.add(launcher.serialNumber, new WebHook(launcher));
+			repos.add(bot.serialNumber, new WebHook(bot));
 		}
 		return repos.get(serial);
 	}

@@ -28,6 +28,7 @@ dependencies {
     compile 'com.fasterxml.jackson.core:jackson-annotations:2.8.5'
     compile 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
     quasar 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
+    compile 'org.jetbrains:annotations:15.0'
     compile 'com.fasterxml.jackson.core:jackson-databind:2.8.5'
     compile 'com.fasterxml.jackson.core:jackson-core:2.8.5'
     compile 'co.paralleluniverse:comsat-httpclient:0.7.0'
@@ -58,7 +59,7 @@ tasks.withType(JavaCompile)
 task run(type: JavaExec) {
 
     standardInput = System.in
-    main = 'com.sunova.bot.Launcher'
+    main = 'com.sunova.bot.Bot'
     classpath = sourceSets.main.runtimeClasspath
 }
 

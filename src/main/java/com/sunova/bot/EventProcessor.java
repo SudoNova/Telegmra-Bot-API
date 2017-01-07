@@ -23,12 +23,23 @@ public class EventProcessor extends Fiber<Void>
 	static final int visitFactor = 2;
 	private Interface botInterface;
 	private MongoDBDriver dbDriver;
+	Bot bot;
 	
-	protected EventProcessor (Interface botInterface)
+	protected EventProcessor ()
 	{
 		this.botInterface = botInterface;
 		dbDriver = new MongoDBDriver();
-		
+	}
+	
+	public Bot getBot ()
+	{
+		return bot;
+	}
+	
+	public void setBot (Bot bot)
+	{
+		this.bot = bot;
+		this.botInterface = bot.getInterface();
 	}
 	
 	void processUpdate (Update update) throws SuspendExecution
@@ -37,22 +48,20 @@ public class EventProcessor extends Fiber<Void>
 		if (update.containsMessage())
 		{
 			Message message = update.getMessage();
-			processMessage(update.getUpdate_id(), message);
-			
+			processMessage(message);
 		}
 		
 	}
 	
-	void processMessage (int updateID, Message message) throws SuspendExecution
+	void processMessage (Message message) throws SuspendExecution
 	{
 		User from = message.getFrom();
-		
 		try
 		{
 			Document doc = dbDriver.getUser(from.getId());
 			if (doc == null)
 			{
-				doc = dbDriver.insertUser(from);
+				doc = dbDriver.insertUser(from, message.getChat().getId());
 			}
 			switch (doc.getInteger("state"))
 			{

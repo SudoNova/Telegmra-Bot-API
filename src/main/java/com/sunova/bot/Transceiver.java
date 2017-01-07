@@ -3,6 +3,7 @@ package com.sunova.bot;
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.httpclient.FiberHttpClientBuilder;
+import co.paralleluniverse.fibers.io.FiberFileChannel;
 import co.paralleluniverse.strands.Strand;
 import org.apache.http.*;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -11,11 +12,12 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
-import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.telegram.objects.Result;
 import org.telegram.objects.Update;
 import org.telegram.objects.User;
@@ -24,9 +26,11 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.file.FileSystems;
+import java.nio.file.StandardOpenOption;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -88,7 +92,7 @@ public class Transceiver
 			@Override
 			public void checkServerTrusted (X509Certificate[] x509Certificates, String s) throws CertificateException
 			{
-				X509Certificate[] certs = Launcher.getBotsCertificates();
+				X509Certificate[] certs = Bot.getBotsCertificates();
 				for (X509Certificate i : certs)
 				{
 					for (X509Certificate j : x509Certificates)
@@ -135,15 +139,15 @@ public class Transceiver
 	Interface botInterface;
 	private boolean shutDown;
 	private UpdatePuller updatePuller;
-	private Launcher launcher;
+	private Bot bot;
 	private boolean shutdown = false;
 	private JsonParser parser;
 	private KeepAliveDaemon daemon;
 	
-	private Transceiver (Launcher launcher)
+	private Transceiver (Bot bot)
 	{
-		this.launcher = launcher;
-		path = path.replace("<token>", launcher.token);
+		this.bot = bot;
+		path = path.replace("<token>", bot.token);
 		parser = JsonParser.getInstance();
 		
 		updatePuller = new UpdatePuller();
@@ -184,14 +188,14 @@ public class Transceiver
 		
 	}
 	
-	static Transceiver getInstance (Launcher launcher)
+	static Transceiver getInstance (Bot bot)
 	{
-		int serial = launcher.serialNumber;
+		int serial = bot.serialNumber;
 		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			Transceiver transceiver = new Transceiver(launcher);
+			Transceiver transceiver = new Transceiver(bot);
 			repos.add(serial, transceiver);
-			transceiver.botInterface = Interface.getInstance(launcher);
+			transceiver.botInterface = Interface.getInstance(bot);
 			return transceiver;
 		}
 		return repos.get(serial);
@@ -206,13 +210,11 @@ public class Transceiver
 	{
 		String getIDQuery = path + "getMe";
 		final HttpGet req = new HttpGet(getIDQuery);
-		
 		try
 		{
 			HttpResponse response = client.execute(req);
 			byte[] byteValue = getResponseByteArray(response);
 			Object obj = parser.parseResult(byteValue).getResult();
-			
 		}
 		catch (IOException e)
 		{
@@ -220,10 +222,14 @@ public class Transceiver
 			System.err.println("Unable to start bot. Network problems found.");
 			System.exit(-1);
 		}
-		enableWebhook(launcher.webhookURL);
+		catch (Result e)
+		{
+			System.err.println(e.toString());
+		}
 		daemon.start();
 	}
 	
+	@Nullable
 	private byte[] getResponseByteArray (HttpResponse response)
 	{
 		try
@@ -237,7 +243,7 @@ public class Transceiver
 		}
 	}
 	
-	protected Result getResult (HttpResponse response)
+	protected Result getResult (@NotNull HttpResponse response)
 	{
 		Result result = null;
 		byte[] byteValue = getResponseByteArray(response);
@@ -248,6 +254,11 @@ public class Transceiver
 		catch (IOException e)
 		{
 			e.printStackTrace();
+		}
+		catch (Result result1)
+		{
+			// TODO: 1/5/2017 decide about result returning logic
+			result = result1;
 		}
 		return result;
 	}
@@ -399,12 +410,25 @@ public class Transceiver
 				System.err.println("Webhook is not responding");
 				return false;
 			}
-			FileBody fb = new FileBody(new File(launcher.certPath + "cert.pem"));
-			entityBuilder.addPart("certificate", fb);
+			try
+			{
+				FiberFileChannel channel = FiberFileChannel.open(
+						FileSystems.getDefault().getPath(bot.resourcesPath + "cert\\" + "cert.pem"),
+						StandardOpenOption.READ
+				                                                );
+				ByteBuffer buffer = ByteBuffer.allocate((int) channel.size());
+				channel.read(buffer, 0);
+				entityBuilder
+						.addBinaryBody("certificate", buffer.array(), ContentType.APPLICATION_OCTET_STREAM, "cert" +
+								".pem");
+			}
+			catch (Throwable e)
+			{
+				e.printStackTrace();
+			}
 		}
 		StringBody sb = new StringBody(webhookURL,
-		                               ContentType
-				                               .TEXT_PLAIN
+		                               ContentType.TEXT_PLAIN
 		);
 		entityBuilder.addPart("url", sb);
 		HttpEntity entity = entityBuilder.build();
@@ -466,6 +490,11 @@ public class Transceiver
 		}
 	}
 	
+	public Bot getBot ()
+	{
+		return bot;
+	}
+	
 	private class UpdatePuller extends Fiber<Void>
 	{
 		@Override
@@ -483,7 +512,7 @@ public class Transceiver
 	
 	public boolean testWebhook () throws SuspendExecution
 	{
-		return testWebhook(launcher.webhookURL + "test");
+		return testWebhook(bot.webhookURL + "test");
 	}
 	
 	public boolean testWebhook (String url) throws SuspendExecution
@@ -500,7 +529,7 @@ public class Transceiver
 		}
 		catch (Exception e)
 		{
-			e.printStackTrace();
+			
 		}
 		return false;//false;
 	}
@@ -510,7 +539,6 @@ public class Transceiver
 		@Override
 		protected Void run () throws SuspendExecution, InterruptedException
 		{
-			sleep(20000);
 			while (!shutDown)
 			{
 				sleep(5000);
@@ -519,7 +547,7 @@ public class Transceiver
 				{
 					if (!isUsingWebhook)
 					{
-						enableWebhook(launcher.webhookURL);
+						enableWebhook(bot.webhookURL);
 					}
 					notifySuccess();
 				}

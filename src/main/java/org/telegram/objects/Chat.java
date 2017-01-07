@@ -29,9 +29,10 @@ public class Chat implements TObject
 		return id;
 	}
 	
-	public void setId (long id)
+	public Chat setId (long id)
 	{
 		this.id = id;
+		return this;
 	}
 	
 	public String getTitle ()

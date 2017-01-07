@@ -252,11 +252,12 @@ public class MongoDBDriver
 		return !(updateResult[0] == null || updateResult[0].wasAcknowledged());
 	}
 	
-	public Document insertUser (User user) throws SuspendExecution, Throwable
+	public Document insertUser (User user, long chatID) throws SuspendExecution, Throwable
 	{
 		
 		Document doc = new Document();
 		doc.append("userID", user.getId());
+		doc.append("chatID", chatID);
 //		doc.append("firstName", user.getFirst_name() == null ? "" : user.getFirst_name());
 //		doc.append("lastName", user.getLast_name() == null ? "" : user.getLast_name());
 		doc.append("type", User.FREE_USER);

@@ -291,10 +291,9 @@ public class Transceiver
 	
 	protected void receiveUpdate (HttpRequest request)
 	{
-		
 		Update result = parseUpdate(request);
+		Logger.TRACE(result);
 		botInterface.processUpdate(result);
-		
 	}
 	
 	protected void getUpdates (int updateIndex) throws SuspendExecution

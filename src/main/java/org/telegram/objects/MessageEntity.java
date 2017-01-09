@@ -1,60 +1,68 @@
 package org.telegram.objects;
 
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonSetter;
+
 /**
  * Created by HellScre4m on 5/2/2016.
  */
 public class MessageEntity implements TObject
 {
-	String ObjectType = "message_entity";
 	private String type;
 	private int offset;
 	private int length;
 	private String url;
 	
+	@JsonGetter ("type")
 	public String getType ()
 	{
 		return type;
 	}
 	
-	public void setType (String type)
+	@JsonSetter ("type")
+	public MessageEntity setType (String type)
 	{
 		this.type = type;
+		return this;
 	}
 	
+	@JsonGetter ("length")
 	public int getLength ()
 	{
-		
 		return length;
 	}
 	
-	public void setLength (int length)
+	@JsonSetter ("length")
+	public MessageEntity setLength (int length)
 	{
 		this.length = length;
+		return this;
 	}
 	
+	@JsonGetter ("offset")
 	public int getOffset ()
 	{
 		return offset;
 	}
 	
-	public void setOffset (int offset)
+	@JsonSetter ("offset")
+	public MessageEntity setOffset (int offset)
 	{
 		this.offset = offset;
+		return this;
 	}
 	
-	public String getOperation ()
-	{
-		return type;
-	}
-	
+	@JsonGetter ("url")
 	public String getUrl ()
 	{
 		return url;
 	}
 	
-	public void setUrl (String url)
+	@JsonSetter ("url")
+	public MessageEntity setUrl (String url)
 	{
 		this.url = url;
+		return this;
 	}
 	
 }

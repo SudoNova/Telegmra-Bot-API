@@ -134,7 +134,7 @@ public class Interface
 			{
 				if (markup instanceof ReplyKeyboardMarkup)
 				{
-					String serializedJson = JsonParser.getInstance().deserializeTObject(markup);
+					String serializedJson = JsonParser.getInstance().serializeTObject(markup);
 					list.add(new AbstractMap.SimpleEntry<>("reply_markup", serializedJson));
 				}
 			}
@@ -343,7 +343,7 @@ public class Interface
 //			{
 //				if (markup instanceof ReplyKeyboardMarkup)
 //				{
-//					String serializedJson = JsonParser.getInstance().deserializeTObject(markup);
+//					String serializedJson = JsonParser.getInstance().serializeTObject(markup);
 //					list.add(new BasicNameValuePair("reply_markup", serializedJson));
 //				}
 //			}

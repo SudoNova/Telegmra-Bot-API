@@ -89,8 +89,11 @@ public class JsonParser
 		}
 		return null;
 	}
-	
-	public String deserializeTObject (TObject object)
+	public String serialize(Object object ) throws JsonProcessingException
+	{
+		return mapper.writeValueAsString(object);
+	}
+	public String serializeTObject (TObject object)
 	{
 		String result = null;
 		try

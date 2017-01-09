@@ -5,10 +5,8 @@ import co.paralleluniverse.fibers.TrueThreadLocal;
 import co.paralleluniverse.fibers.io.FiberFileChannel;
 import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
-import org.telegram.objects.Chat;
-import org.telegram.objects.Document;
-import org.telegram.objects.Message;
-import org.telegram.objects.Result;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import org.telegram.objects.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +22,6 @@ import java.util.LinkedList;
  */
 public class Logger
 {
-	private static final Logger instance;
 	private static final ThreadLocal<Long> logID;
 	private static final HashMap<Long, LinkedList<char[]>> loggerMap;
 	private static final ReentrantReadWriteLock mapLock;
@@ -43,70 +40,68 @@ public class Logger
 	
 	static
 	{
-		instance = new Logger();
 		logID = new TrueThreadLocal<>();
 		buffer = new ThreadLocal<>();
 		mapLock = new ReentrantReadWriteLock();
 		loggerMap = new HashMap<>();
 	}
 	
-	public static Logger getInstance ()
+	private static void getInstance ()
 	{
-		return getInstance(null);
+		setAncestor(null);
 	}
 	
-	public static Logger getInstance (Long ancestorID)
+	public static void setAncestor (Long ancestorID)
 	{
 		Long ID = Strand.currentStrand().getId();
-		if (logID.get() == null)
+		Logger.logID.set(ID);
+		buffer.set(new StringBuilder());
+		mapLock.writeLock().lock();
+		LinkedList<char[]> list;
+		if (ancestorID != null)
 		{
-			Logger.logID.set(ID);
-			buffer.set(new StringBuilder());
-			mapLock.writeLock().lock();
-			LinkedList<char[]> list;
-			if (ancestorID != null)
-			{
-				list = loggerMap.get(ancestorID);
-				list = new LinkedList<>(list);
-			}
-			else
-			{
-				list = new LinkedList<>();
-			}
-			loggerMap.put(ID, list);
-			mapLock.writeLock().unlock();
-			
+			list = loggerMap.get(ancestorID);
+			list = new LinkedList<>(list);
 		}
-		return instance;
+		else
+		{
+			list = new LinkedList<>();
+		}
+		loggerMap.put(ID, list);
+		mapLock.writeLock().unlock();
 	}
 	
-	public void INFO (Object... args)
+	public static void INFO (Object... args)
 	{
 		log(LEVEL.INFO, args);
 	}
 	
-	public void WARNING (Object... args)
+	public static void WARNING (Object... args)
 	{
 		log(LEVEL.WARNING, args);
 	}
 	
-	public void ERROR (Object... args)
+	public static void ERROR (Object... args)
 	{
 		log(LEVEL.ERROR, args);
 	}
 	
-	public void TRACE (Object... args)
+	public static void TRACE (Object... args)
 	{
 		log(LEVEL.TRACE, args);
 	}
 	
-	public void DEBUG (Object... args)
+	public static void DEBUG (Object... args)
 	{
 		log(LEVEL.DEBUG, args);
 	}
 	
-	private void log (LEVEL level, Object... obj)
+	private static void log (LEVEL level, Object... obj)
 	{
+		if (logID.get() == null)
+		{
+			setAncestor(null);
+		}
 		StringBuilder builder = buffer.get();
 		builder.setLength(0);
 		switch (level)
@@ -133,6 +128,26 @@ public class Logger
 			{
 				builder.append(((String) i).toCharArray());
 			}
+			else if (i instanceof TObject)
+			{
+				try
+				{
+					JsonParser.getInstance().serialize(i);
+				}
+				catch (JsonProcessingException e)
+				{
+					try
+					{
+						builder.append((String) (i.getClass().getDeclaredMethod(
+								"toString", String.class).invoke(
+								i, (Object) null)));
+					}
+					catch (Exception e1)
+					{
+						e1.printStackTrace();
+					}
+				}
+			}
 			else
 			{
 				try
@@ -151,7 +166,6 @@ public class Logger
 		LinkedList<char[]> list = loggerMap.get(logID.get());
 		mapLock.readLock().unlock();
 		list.add(builder.toString().toCharArray());
-		
 	}
 	
 	public File dumpAndSend (Long adminUserID, Bot bot) throws SuspendExecution, IOException, Result

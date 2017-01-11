@@ -1,4 +1,4 @@
-package com.sunova.bot;
+package com.sunova.botframework;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
@@ -20,7 +20,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.telegram.objects.Result;
 import org.telegram.objects.Update;
-import org.telegram.objects.User;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -136,7 +135,7 @@ public class Transceiver
 	}
 	
 	AtomicInteger updateIndex;
-	Interface botInterface;
+	BotInterface botInterface;
 	private boolean shutDown;
 	private UpdatePuller updatePuller;
 	private Bot bot;
@@ -195,7 +194,7 @@ public class Transceiver
 		{
 			Transceiver transceiver = new Transceiver(bot);
 			repos.add(serial, transceiver);
-			transceiver.botInterface = Interface.getInstance(bot);
+			transceiver.botInterface = BotInterface.getInstance(bot);
 			return transceiver;
 		}
 		return repos.get(serial);
@@ -540,7 +539,7 @@ public class Transceiver
 		{
 			while (!shutDown)
 			{
-				sleep(5000);
+				sleep(2000);
 				boolean answer = testWebhook();
 				if (answer)
 				{
@@ -554,7 +553,10 @@ public class Transceiver
 				{
 					if (isFailure)
 					{
-						disableWebhook();
+						if (isUsingWebhook)
+						{
+							disableWebhook();
+						}
 					}
 					else
 					{
@@ -564,11 +566,6 @@ public class Transceiver
 			}
 			return null;
 		}
-	}
-	
-	public User getUesr () throws SuspendExecution, UnsupportedHttpVersionException
-	{
-		throw new UnsupportedHttpVersionException();
 	}
 }
 

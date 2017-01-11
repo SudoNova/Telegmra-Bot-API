@@ -1,4 +1,4 @@
-package com.sunova.bot;
+package com.sunova.botframework;
 
 import org.apache.http.*;
 import org.apache.http.entity.StringEntity;

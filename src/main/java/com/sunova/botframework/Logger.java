@@ -1,5 +1,6 @@
-package com.sunova.bot;
+package com.sunova.botframework;
 
+import co.paralleluniverse.fibers.FiberAsync;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.TrueThreadLocal;
 import co.paralleluniverse.fibers.io.FiberFileChannel;
@@ -12,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
@@ -140,11 +142,22 @@ public class Logger
 					{
 						builder.append((String) (i.getClass().getDeclaredMethod(
 								"toString", String.class).invoke(
-								i, (Object) null)));
+								i, null)));
 					}
-					catch (Exception e1)
+					catch (NoSuchMethodException e1)
 					{
-						e1.printStackTrace();
+						try
+						{
+							builder.append(JsonParser.getInstance().serialize(i));
+						}
+						catch (JsonProcessingException e2)
+						{
+							e2.printStackTrace();
+						}
+					}
+					catch (Exception e2)
+					{
+						e.printStackTrace();
 					}
 				}
 			}
@@ -161,6 +174,7 @@ public class Logger
 					e.printStackTrace();
 				}
 			}
+			builder.append("\n");
 		}
 		mapLock.readLock().lock();
 		LinkedList<char[]> list = loggerMap.get(logID.get());
@@ -168,7 +182,13 @@ public class Logger
 		list.add(builder.toString().toCharArray());
 	}
 	
-	public File dumpAndSend (Long adminUserID, Bot bot) throws SuspendExecution, IOException, Result
+	public static File dumpAndSend (Bot bot) throws SuspendExecution, IOException, Result
+	{
+		//TODO change
+		return dumpAndSend(318036950L, bot);
+	}
+	
+	public static File dumpAndSend (Long adminUserID, Bot bot) throws SuspendExecution, IOException, Result
 	{
 		File file = dump(bot);
 		Document doc = new Document().setFile(file);
@@ -178,7 +198,7 @@ public class Logger
 		return file;
 	}
 	
-	public File dump (Bot bot) throws SuspendExecution, IOException
+	public static File dump (Bot bot) throws SuspendExecution, IOException
 	{
 		StringBuilder builder = buffer.get();
 		builder.setLength(0);
@@ -191,30 +211,44 @@ public class Logger
 			builder.append(i);
 		}
 		byte[] log = builder.toString().getBytes("UTF-8");
-		Path path = FileSystems
+		final Path path = FileSystems
 				.getDefault()
 				.getPath(bot.resourcesPath + "logs\\" + "log-" + System.currentTimeMillis() + ".txt");
-		
 		FiberFileChannel channel = FiberFileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		try
+		{
+			new FiberAsync<Void, IOException>()
+			{
+				@Override
+				protected void requestAsync ()
+				{
+					try
+					{
+						Files.createDirectories(path.getParent());
+						asyncCompleted(null);
+					}
+					catch (IOException e)
+					{
+						asyncFailed(e);
+					}
+				}
+			}.run();
+		}
+		catch (InterruptedException e)
+		{
+			e.printStackTrace();
+		}
 		ByteBuffer buffer = ByteBuffer.wrap(log);
 		try
 		{
 			channel.write(buffer);
+			channel.close();
 		}
-		catch (Throwable throwable)
+		catch (IOException throwable)
 		{
-			if (throwable instanceof IOException)
-			{
-				throw (IOException) throwable;
-			}
-			else
-			{
-				throwable.printStackTrace();
-			}
+			throwable.printStackTrace();
 		}
 		return path.toFile();
 //		return file;
 	}
-	
-	
 }

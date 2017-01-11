@@ -1,13 +1,16 @@
 package com.sunova.bot;
 
-import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
+import co.paralleluniverse.strands.Strand;
+import com.sunova.botframework.Logger;
+import com.sunova.botframework.UserInterface;
 import com.sunova.prebuilt.Keyboards;
 import com.sunova.prebuilt.Messages;
 import com.sunova.prebuilt.States;
 import org.bson.Document;
 import org.telegram.objects.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,42 +21,17 @@ import java.util.regex.Pattern;
 /**
  * Created by HellScre4m on 5/9/2016.
  */
-public class EventProcessor extends Fiber<Void>
+public class EventProcessor extends UserInterface
 {
 	static final int visitFactor = 2;
-	private Interface botInterface;
 	private MongoDBDriver dbDriver;
-	Bot bot;
 	
-	protected EventProcessor ()
+	public EventProcessor ()
 	{
-		this.botInterface = botInterface;
 		dbDriver = new MongoDBDriver();
 	}
 	
-	public Bot getBot ()
-	{
-		return bot;
-	}
-	
-	public void setBot (Bot bot)
-	{
-		this.bot = bot;
-		this.botInterface = bot.getInterface();
-	}
-	
-	void processUpdate (Update update) throws SuspendExecution
-	{
-//		System.out.println("Processor processing update");
-		if (update.containsMessage())
-		{
-			Message message = update.getMessage();
-			processMessage(message);
-		}
-		
-	}
-	
-	void processMessage (Message message) throws SuspendExecution
+	public void onMessage (Message message) throws SuspendExecution
 	{
 		User from = message.getFrom();
 		try
@@ -100,6 +78,11 @@ public class EventProcessor extends Fiber<Void>
 				case States.MAIN_MENU:
 				{
 					String choice = message.getText();
+					if (choice == null)
+					{
+						System.err.println("Null choice main menu");
+						return;
+					}
 					if (choice.equals(Messages.REGISTER_POST))
 					{
 						int coins = doc.getInteger("coins");
@@ -114,7 +97,9 @@ public class EventProcessor extends Fiber<Void>
 						{
 							sendStateMessage(States.WAITING_FOR_POST, message, from);
 							dbDriver.updateUser(from,
-							                    new Document("$set", new Document("state", States.WAITING_FOR_POST)
+							                    new Document(
+									                    "$set", new Document(
+									                    "state", States.WAITING_FOR_POST)
 							                    )
 							                   );
 						}
@@ -174,7 +159,7 @@ public class EventProcessor extends Fiber<Void>
 						{
 							channelName = matcher.group();
 							channelName = channelName.substring(1, channelName.length() - 1);
-							chatID = botInterface.getChatID("@" + channelName).getId();
+							chatID = botInterface.getChat("@" + channelName).getId();
 							pattern = Pattern.compile("/\\d+");
 							matcher = pattern.matcher(messageBody);
 							if (matcher.find())
@@ -190,26 +175,36 @@ public class EventProcessor extends Fiber<Void>
 						forwardChat.setId(chatID);
 						message.setForward_from_chat(forwardChat);
 						message.setForward_from_message_id(messageID);
-						Result result = botInterface.forwardMessage(message);
-						if (result.isOk())
+						try
 						{
-							message.setText(
-									Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
-							message.setReply_markup(Keyboards.ENTER_INPUT);
-							botInterface.sendMessage(message);
-							Document newDoc = new Document("$set",
-							                               new Document("state", States.WAITING_FOR_AMOUNT).append
-									                               ("previous_state", States.WAITING_FOR_POST)
-									                               .append("temp", Arrays
-											                               .asList(chatID, messageID))
-							);
-							dbDriver.updateUser(from, newDoc);
+							botInterface.forwardMessage(message);
 						}
-						else
+						catch (Result result)
 						{
+							if (result.getError_code() == 403)
+							{
+								Logger.ERROR(result);
+								Logger.DEBUG("Error returning post to user");
+								Logger.TRACE(from);
+								Logger.dumpAndSend(bot);
+								return;
+							}
 							message.setText(Messages.INVALID_POST);
 							botInterface.sendMessage(message);
 						}
+						message.setText(
+								Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
+						message.setReply_markup(Keyboards.ENTER_INPUT);
+						botInterface.sendMessage(message);
+						Document newDoc = new Document("$set",
+						                               new Document("state", States.WAITING_FOR_AMOUNT).append
+								                               ("previous_state", States.WAITING_FOR_POST)
+								                               .append("temp", Arrays
+										                               .asList(chatID, messageID))
+						);
+						dbDriver.updateUser(from, newDoc);
+						
+						
 					}
 				}
 				break;
@@ -291,6 +286,20 @@ public class EventProcessor extends Fiber<Void>
 				}
 			}
 		}
+		catch (Result result)
+		{
+			Logger.ERROR(result);
+			Logger.DEBUG(Arrays.toString(Strand.currentStrand().getStackTrace()));
+			Logger.TRACE(from, message);
+			try
+			{
+				Logger.dumpAndSend(bot);
+			}
+			catch (IOException | Result e)
+			{
+				e.printStackTrace();
+			}
+		}
 		catch (Throwable throwable)
 		{
 			throwable.printStackTrace();
@@ -332,21 +341,28 @@ public class EventProcessor extends Fiber<Void>
 					}
 				}
 			}
-			Result result = botInterface.forwardMessage(message);
-			if (result.isOk())
+			try
 			{
-				Document updateDoc = new Document("temp", new Document("upsert", upsert)
-						.append("chatID", chatID)
-						.append("messageID", messageID)
-						.append("postReqID", postReqID));
-				goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
+				botInterface.forwardMessage(message);
 			}
-			else
+			catch (Result result)
 			{
+				if (result.getError_code() == 403)
+				{
+					Logger.ERROR(result);
+					Logger.DEBUG("Error forwarding post to user");
+					Logger.TRACE(from);
+					Logger.dumpAndSend(bot);
+					return;
+				}
 				dbDriver.errorSendingPost(chatID, messageID);
 				goToNextPost(message, from, user);
-				//TODO finalize order
 			}
+			Document updateDoc = new Document("temp", new Document("upsert", upsert)
+					.append("chatID", chatID)
+					.append("messageID", messageID)
+					.append("postReqID", postReqID));
+			goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
 		}
 		else
 		{
@@ -357,7 +373,7 @@ public class EventProcessor extends Fiber<Void>
 		}
 	}
 	
-	private void sendStateMessage (int state, Message message, User from) throws SuspendExecution
+	private void sendStateMessage (int state, Message message, User from) throws SuspendExecution, Result
 	{
 		switch (state)
 		{
@@ -371,7 +387,6 @@ public class EventProcessor extends Fiber<Void>
 				message.setReply_markup(Keyboards.SEND_POST);
 				botInterface.sendMessage(message);
 				break;
-			
 		}
 	}
 	
@@ -394,7 +409,7 @@ public class EventProcessor extends Fiber<Void>
 		dbDriver.updateUser(from, newDoc);
 	}
 	
-	void shutDown ()
+	protected void shutDown ()
 	{
 		dbDriver.shutDown();
 	}

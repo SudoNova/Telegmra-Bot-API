@@ -1,4 +1,4 @@
-package com.sunova.bot;
+package com.sunova.botframework;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
@@ -16,7 +16,6 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.*;
@@ -53,10 +52,10 @@ public class Bot
 	PrivateKey privateKey;
 	String webhookURL;
 	String resourcesPath;
-	private Interface botInterface;
+	private BotInterface botInterface;
 	private WebHook webHook;
 	private Transceiver transceiver;
-	EventProcessor eventProcessor;
+	UserInterface userInterface;
 	private ServantFiber requestHandler;
 	
 	private Bot ()
@@ -75,19 +74,6 @@ public class Bot
 		bot.serialNumber = serialNumberTracker.getAndIncrement();
 		botRepos.add(bot.serialNumber, bot);
 		return bot;
-	}
-	
-	public static void main (String[] args) throws SuspendExecution, IOException
-	{
-//		System.setProperty("Dco.paralleluniverse.fibers.verifyInstrumentation", "true");
-//		System.setProperty("Dhttps.protocols", "TLSv1.1,TLSv1.2");
-		Bot instance = createInstance();
-		String token = "304376707:AAGug5ec_opFf6IkTBZLG3X32nkCFgE_C-I";
-		String domainAddress = "sunova.dynu.com";
-		EventProcessor processor = new EventProcessor();
-		instance.setBotToken(token).setDomainAddress(domainAddress)
-				.setEventProcessor(processor).build();
-		
 	}
 	
 	static X509Certificate[] getBotsCertificates ()
@@ -115,7 +101,7 @@ public class Bot
 			System.err.println("Specify bot token to via setBotToken()");
 			return this;
 		}
-		if (eventProcessor == null)
+		if (userInterface == null)
 		{
 			System.err.println("Please set an EventProcessor");
 			return this;
@@ -124,9 +110,9 @@ public class Bot
 		return this;
 	}
 	
-	public Bot setEventProcessor (EventProcessor processor)
+	public Bot setUserInterface (UserInterface userInterface)
 	{
-		eventProcessor = processor;
+		this.userInterface = userInterface;
 		return this;
 	}
 	
@@ -145,7 +131,7 @@ public class Bot
 	
 	private void init ()
 	{
-		eventProcessor.setBot(this);
+		userInterface.init(this);
 		resourcesPath = System.getProperty("user.dir") + "\\resources\\" + token.replace(":", "_") + "\\";
 		File temp = new File(resourcesPath);
 		if (!temp.exists())
@@ -218,8 +204,8 @@ public class Bot
 				token +
 				"/";
 		transceiver = Transceiver.getInstance(this);
-		botInterface = Interface.getInstance(this);
-		eventProcessor.setBot(this);
+		botInterface = BotInterface.getInstance(this);
+		userInterface.init(this);
 		webHook = WebHook.getInstance(this);
 		requestHandler = new
 				
@@ -263,7 +249,7 @@ public class Bot
 		System.out.println("Generating Certificate");
 		String certPath = resourcesPath + "cert\\";
 		File temp = new File(certPath);
-		temp.mkdir();
+		temp.mkdirs();
 		Date startDate = new Date();
 		Calendar cal = Calendar.getInstance();
 		cal.add(Calendar.YEAR, 1);
@@ -330,7 +316,7 @@ public class Bot
 		
 	}
 	
-	public Interface getInterface ()
+	public BotInterface getInterface ()
 	{
 		return botInterface;
 	}

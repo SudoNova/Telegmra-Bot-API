@@ -2,8 +2,12 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.FiberAsync;
 import co.paralleluniverse.fibers.SuspendExecution;
+import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.SingleResultCallback;
-import com.mongodb.async.client.*;
+import com.mongodb.async.client.MongoClient;
+import com.mongodb.async.client.MongoClients;
+import com.mongodb.async.client.MongoCollection;
+import com.mongodb.async.client.MongoDatabase;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.ReturnDocument;
@@ -12,10 +16,7 @@ import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.telegram.objects.User;
 
-import java.util.AbstractMap;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static com.mongodb.client.model.Filters.*;
@@ -30,7 +31,7 @@ public class MongoDBDriver
 	private MongoCollection<Document> channels;
 	private MongoCollection<Document> posts;
 	private MongoCollection<Document> misc;
-	private HashMap<Integer, AbstractMap.SimpleEntry<List<Document>, Long>> postListMap;
+	private HashMap<Long, AsyncBatchCursor<Document>> postListMap;
 	
 	public MongoDBDriver ()
 	{
@@ -383,67 +384,81 @@ public class MongoDBDriver
 		updateUser(user, new Document("$inc", new Document("coins", -amount * EventProcessor.visitFactor)));
 	}
 	
-	public Document nextPost (int userID) throws SuspendExecution, Throwable
+	public Document nextPost (long userID) throws SuspendExecution, Throwable
 	{
-		AbstractMap.SimpleEntry<List<Document>, Long> entry = postListMap.get(userID);
-		if (entry == null ||
-				System.currentTimeMillis() - entry.getValue() > TimeUnit.MINUTES.toMillis(10)
-				|| entry.getKey().isEmpty())
-		
+		AsyncBatchCursor<Document> cursor = postListMap.get(userID);
+		if (cursor == null || cursor.isClosed())
 		{
-			entry = new FiberAsync<AbstractMap.SimpleEntry<List<Document>, Long>,
+			cursor = new FiberAsync<AsyncBatchCursor<Document>,
 					Throwable>()
 			{
-				
 				@Override
 				protected void requestAsync ()
 				{
-					FindIterable<Document> it = posts.find(
-							and(
-									elemMatch("orders", gt("remaining", 0)),
-									or(
-											nin("visits.userID", userID),
-											elemMatch("visits",
-											          and(
-													          eq("userID", userID),
-													          lt("time",
-													             System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1)
-													            )
-											
-											             )
-											         )
-									  )
+					posts.find(and(
+							elemMatch("orders", and(
+									gt("remaining", 0),
+									ne("ownerID", userID)
+							                       )),
+							or(nin("visits.userID", userID),
+							   elemMatch("visits",
+							             and(eq("userID", userID),
+							                 lt("time",
+							                    System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1)
+							                   )
 							
-							
-							   ));//.projection(Projections.elemMatch("orders"));
+							                )
+							            )
+							  )
 					
-					LinkedList<Document> list = new LinkedList<>();
-					it.into(list,
-					        (r, t) ->
-					        {
-						        if (t != null)
-						        {
-							        asyncFailed(t);
-						        }
-						        else
-						        {
-							        asyncCompleted(new AbstractMap
-									        .SimpleEntry<>(r, System.currentTimeMillis()
-							        ));
-						        }
-					        }
-					       );
+					
+					              )).batchSize(1).
+							batchCursor((r, t) ->
+							            {
+								            if (t != null)
+								            {
+									            asyncFailed(t);
+								            }
+								            else
+								            {
+									            asyncCompleted(r);
+								            }
+							            });//.projection(Projections.elemMatch("orders"));
+					
+					
 				}
 			}.run();
-			postListMap.put(userID, entry);
+			postListMap.put(userID, cursor);
 		}
-		entry = postListMap.get(userID);
-		LinkedList<Document> list = (LinkedList<Document>) entry.getKey();
-		if (list == null || list.isEmpty())
+		cursor = postListMap.get(userID);
+		final AsyncBatchCursor<Document> temp = cursor;
+		Document result = new FiberAsync<Document, Throwable>()
 		{
-			return null;
-		}
-		return list.pollFirst();
+			@Override
+			protected void requestAsync ()
+			{
+				temp.next(
+						(r, t) ->
+						{
+							if (t != null)
+							{
+								asyncFailed(t);
+							}
+							else
+							{
+								try
+								{
+									asyncCompleted(r.get(0));
+								}
+								catch (NullPointerException e)
+								{
+									asyncCompleted(null);
+								}
+							}
+						});
+			}
+		}.run();
+		return result;
 	}
 	
 	public Document confirmVisit (User from, long chatID, int messageID, int postReqID, boolean upsert) throws

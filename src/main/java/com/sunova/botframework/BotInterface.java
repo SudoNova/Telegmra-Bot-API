@@ -1,13 +1,13 @@
-package com.sunova.bot;
+package com.sunova.botframework;
 
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.io.FiberFileChannel;
-import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
+import org.apache.http.UnsupportedHttpVersionException;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
@@ -26,14 +26,15 @@ import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
+import java.util.concurrent.locks.ReadWriteLock;
 
 
 /**
  * Created by HellScre4m on 5/11/2016.
  */
-public class Interface
+public class BotInterface
 {
-	private static ArrayList<Interface> repos;
+	private static ArrayList<BotInterface> repos;
 	
 	static
 	{
@@ -45,43 +46,34 @@ public class Interface
 	 * Repository for incoming updates
 	 */
 	private HashMap<Integer, AbstractMap.SimpleEntry<Update, Long>> updateRepos;
-	/**
-	 * Repository for outgoing requests
-	 */
-	private HashMap<HttpUriRequest, Long> requestRepos;
-	/**
-	 * Keeps track of pending request timeouts
-	 */
+	
 	private boolean shutDown;
-	private ReentrantReadWriteLock updateReposLock;
-	private ReentrantReadWriteLock requestReposLock;
-	private EventProcessor processor;
+	private UserInterface processor;
+	private ReadWriteLock updateReposLock;
 	
 	
-	private Interface (Bot bot)
+	private BotInterface (Bot bot)
 	{
 		transceiver = Transceiver.getInstance(bot);
 		updateRepos = new HashMap<>();
-		requestRepos = new HashMap<>();
 		
 		updateReposLock = new ReentrantReadWriteLock();
-		requestReposLock = new ReentrantReadWriteLock();
-		processor = bot.eventProcessor;
+		processor = bot.userInterface;
 		
 		new Servant().start();
 	}
 	
-	static Interface getInstance (Bot bot)
+	static BotInterface getInstance (Bot bot)
 	{
 		int serial = bot.serialNumber;
 		if (repos.size() <= serial || repos.get(serial) == null)
 		{
-			repos.add(serial, new Interface(bot));
+			repos.add(serial, new BotInterface(bot));
 		}
 		return repos.get(serial);
 	}
 	
-	public Chat getChatID (String userName) throws SuspendExecution, Result
+	public Chat getChat (String userName) throws SuspendExecution, Result
 	{
 		List<NameValuePair> list = new ArrayList<>(3);
 		list.add(new BasicNameValuePair("chat_id", userName));
@@ -108,18 +100,19 @@ public class Interface
 		}
 	}
 	
-	public Chat getChatUserName (int chatID) throws SuspendExecution, Result
+	public Chat getChat (int chatID) throws SuspendExecution, Result
 	{
-		return getChatID(chatID + "");
+		return getChat(chatID + "");
 	}
 	
-	public Result sendMessage (Message message) throws SuspendExecution
+	public Message sendMessage (Message message) throws SuspendExecution, Result
 	{
+		
 		return sendMessage(message, false);
 	}
 	
-	public Result sendMessage (Message message, boolean disableNotification) throws
-			SuspendExecution
+	public Message sendMessage (Message message, boolean disableNotification) throws
+			SuspendExecution, Result
 	{
 		try
 		{
@@ -134,7 +127,7 @@ public class Interface
 			{
 				if (markup instanceof ReplyKeyboardMarkup)
 				{
-					String serializedJson = JsonParser.getInstance().serializeTObject(markup);
+					String serializedJson = JsonParser.getInstance().serialize(markup);
 					list.add(new AbstractMap.SimpleEntry<>("reply_markup", serializedJson));
 				}
 			}
@@ -232,7 +225,7 @@ public class Interface
 				entity = new UrlEncodedFormEntity(newList, "UTF-8");
 			}
 			post.setEntity(entity);
-			return sendRequest(post);
+			return (Message) sendRequest(post).getResult()[0];
 		}
 		catch (IOException | URISyntaxException e)
 		{
@@ -241,13 +234,31 @@ public class Interface
 		return null;
 	}
 	
-	private Result sendRequest (HttpUriRequest req) throws SuspendExecution
+	private Result sendRequest (HttpUriRequest req) throws SuspendExecution, Result
 	{
-		requestReposLock.writeLock().lock();
-		requestRepos.put(req, System.currentTimeMillis());
-		requestReposLock.writeLock().unlock();
-		Result result = transceiver.execute(req);
-		return result;
+		while (true)
+		{
+			Result result = transceiver.execute(req);
+			if (result.isOk())
+			{
+				return result;
+			}
+			if (result.getError_code() == 429)
+			{
+				System.err.println("Your bot is hitting limits. Slow down!");
+				//TODO add method
+				try
+				{
+					Fiber.sleep(25);
+				}
+				catch (InterruptedException e)
+				{
+					e.printStackTrace();
+				}
+				continue;
+			}
+			throw result;
+		}
 		//TODO handle API framework side errors
 	}
 	
@@ -268,7 +279,11 @@ public class Interface
 					int index = transceiver.updateIndex.get();
 					int currentIndex = Math.max(index, updateID + 1);
 					transceiver.updateIndex.compareAndSet(index, currentIndex);
-					processor.processUpdate(update);
+					if (update.containsMessage())
+					{
+						processor.onMessage(update.getMessage());
+					}
+					
 				}
 				else
 				{
@@ -319,18 +334,10 @@ public class Interface
 	
 	void shutDown () throws SuspendExecution, InterruptedException
 	{
-		while (!shutDown)
-		{
-			if (requestRepos.isEmpty())
-			{
-				shutDown = true;
-			}
-			Strand.sleep(250);
-		}
 		processor.shutDown();
 	}
 	
-	public Result forwardMessage (Message message) throws SuspendExecution
+	public Message forwardMessage (Message message) throws SuspendExecution, Result
 	{
 		try
 		{
@@ -352,13 +359,18 @@ public class Interface
 			post.setURI(new URI(Transceiver.getPath() + "forwardMessage"));
 			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
-			return sendRequest(post);
+			return (Message) sendRequest(post).getResult()[0];
 		}
 		catch (IOException | URISyntaxException e)
 		{
 			e.printStackTrace();
 		}
 		return null; //TODO add status code
+	}
+	
+	public User getUesr () throws SuspendExecution, UnsupportedHttpVersionException
+	{
+		throw new UnsupportedHttpVersionException();
 	}
 	
 	private class Servant extends Fiber<Void>

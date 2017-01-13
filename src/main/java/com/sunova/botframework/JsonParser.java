@@ -54,9 +54,10 @@ public class JsonParser
 			if (!results.isOk())
 			{
 				System.err.println(new String(input));
+				throw results;
 			}
 		}
-		catch (Exception e)
+		catch (IOException e)
 		{
 			e.printStackTrace();
 			System.out.println(new String(input));

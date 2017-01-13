@@ -2,6 +2,7 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.strands.Strand;
+import com.mongodb.MongoException;
 import com.sunova.botframework.Logger;
 import com.sunova.botframework.UserInterface;
 import com.sunova.prebuilt.Keyboards;
@@ -15,20 +16,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Created by HellScre4m on 5/9/2016.
  */
 public class EventProcessor extends UserInterface
 {
-	static final int visitFactor = 2;
+	static final int referralReward = 20;
 	private MongoDBDriver dbDriver;
+	private ViewEntity viewEntity;
 	
 	public EventProcessor ()
 	{
 		dbDriver = new MongoDBDriver();
+		viewEntity = new ViewEntity(dbDriver);
 	}
 	
 	public void onMessage (Message message) throws SuspendExecution
@@ -36,254 +37,36 @@ public class EventProcessor extends UserInterface
 		User from = message.getFrom();
 		try
 		{
-			Document doc = dbDriver.getUser(from.getId());
-			if (doc == null)
-			{
-				doc = dbDriver.insertUser(from, message.getChat().getId());
-			}
+			Document doc = getUser(message, from);
 			switch (doc.getInteger("state"))
 			{
 				case States.START:
-				{
-					message.setText(
-							Messages.WELCOME.replace("{first}", from.getFirst_name())
-									.replace("{last}", from.getLast_name()));
-					message.setReply_markup(Keyboards.GET_PHONE);
-					botInterface.sendMessage(message);
-					dbDriver.updateUser(from, new Document("$set", new Document("state", States
-							.WAITING_FOR_PHONE_NUMBER)));
-				}
-				break;
+					welCome(message, from);
+					break;
 				case States.WAITING_FOR_PHONE_NUMBER:
-				{
-					Contact contact = message.getContact();
-					if (contact == null || contact.getUser_id() != from.getId())
-					{
-						message.setText(Messages.RESEND_PHONE_NUMBER);
-						botInterface.sendMessage(message);
-					}
-					else
-					{
-						//TODO check for previous account
-						message.setText(Messages.PHONE_NUMBER_CONFIRMED);
-						botInterface.sendMessage(message);
-						sendStateMessage(States.MAIN_MENU, message, from);
-						dbDriver.updateUser(from, new Document("$set", new Document("phoneNumber", Long.parseLong
-								(contact
-										 .getPhone_number
-												 ())).append("state", States.MAIN_MENU)));
-					}
-				}
-				break;
+					getPhoneNumber(message, from, doc);
+					break;
 				case States.MAIN_MENU:
-				{
-					String choice = message.getText();
-					if (choice == null)
-					{
-						System.err.println("Null choice main menu");
-						return;
-					}
-					if (choice.equals(Messages.REGISTER_POST))
-					{
-						int coins = doc.getInteger("coins");
-						if (coins < 2)
-						{
-							message.setText(Messages.LOW_CREDITS);
-							botInterface.sendMessage(message);
-							sendStateMessage(States.MAIN_MENU, message, from);
-							goToState(from, States.MAIN_MENU);
-						}
-						else
-						{
-							sendStateMessage(States.WAITING_FOR_POST, message, from);
-							dbDriver.updateUser(from,
-							                    new Document(
-									                    "$set", new Document(
-									                    "state", States.WAITING_FOR_POST)
-							                    )
-							                   );
-						}
-					}
-					else if (choice.equals(Messages.VIEW_POSTS))
-					{
-						goToNextPost(message, from, doc);
-					}
-					//TODO other choices
-				}
-				break;
+					processMainMenu(message, from, doc);
+					break;
 				case States.CONFIRM_VIEW_POST:
-				{
-					String choice = message.getText();
-					if (choice != null)
-					{
-						Document temp = doc.get("temp", Document.class);
-						boolean upsert = temp.getBoolean("upsert");
-						long chatID = temp.getLong("chatID");
-						int messageID = temp.getInteger("messageID");
-						int postReqID = temp.getInteger("postReqID");
-						doc = dbDriver.confirmVisit(from, chatID, messageID, postReqID, upsert);
-						if (choice.contains(Messages.VIEW_AGAIN.substring(0, 14)))
-						{
-							goToNextPost(message, from, doc);
-						}
-						else if (choice.equals(Messages.VIEW_CONFIRMED))
-						{
-							dbDriver
-									.confirmVisit(from, chatID, messageID, postReqID, upsert);
-							goToState(from, States.MAIN_MENU);
-						}
-					}
-				}
-				break;
+					viewEntity.confirmViewPost(message, from, doc, this);
+					break;
 				case States.WAITING_FOR_POST:
-				{
-					Long chatID = null;
-					Integer messageID = null;
-					if (message.getText() != null && message.getText().equals(Messages.RETURN_TO_MAIN))
-					{
-						sendStateMessage(States.MAIN_MENU, message, from);
-						goToState(from, States.MAIN_MENU);
-					}
-					else if (message.getForward_from_chat() != null)
-					{
-						chatID = message.getForward_from_chat().getId();
-						messageID = message.getForward_from_message_id();
-					}
-					else
-					{
-						Pattern pattern = Pattern.compile("/\\w+/");
-						String messageBody = message.getText();
-						Matcher matcher = pattern.matcher(messageBody);
-						String channelName;
-						if (matcher.find())
-						{
-							channelName = matcher.group();
-							channelName = channelName.substring(1, channelName.length() - 1);
-							chatID = botInterface.getChat("@" + channelName).getId();
-							pattern = Pattern.compile("/\\d+");
-							matcher = pattern.matcher(messageBody);
-							if (matcher.find())
-							{
-								messageID = Integer.parseInt(matcher.group().substring(1));
-							}
-							
-						}
-					}
-					if (!(chatID == null || messageID == null))
-					{
-						Chat forwardChat = new Chat();
-						forwardChat.setId(chatID);
-						message.setForward_from_chat(forwardChat);
-						message.setForward_from_message_id(messageID);
-						try
-						{
-							botInterface.forwardMessage(message);
-						}
-						catch (Result result)
-						{
-							if (result.getError_code() == 403)
-							{
-								Logger.ERROR(result);
-								Logger.DEBUG("Error returning post to user");
-								Logger.TRACE(from);
-								Logger.dumpAndSend(bot);
-								return;
-							}
-							message.setText(Messages.INVALID_POST);
-							botInterface.sendMessage(message);
-						}
-						message.setText(
-								Messages.ENTER_AMOUNT_VISIT.replace("{coins}", doc.getInteger("coins") + ""));
-						message.setReply_markup(Keyboards.ENTER_INPUT);
-						botInterface.sendMessage(message);
-						Document newDoc = new Document("$set",
-						                               new Document("state", States.WAITING_FOR_AMOUNT).append
-								                               ("previous_state", States.WAITING_FOR_POST)
-								                               .append("temp", Arrays
-										                               .asList(chatID, messageID))
-						);
-						dbDriver.updateUser(from, newDoc);
-						
-						
-					}
-				}
-				break;
+					viewEntity.getPost(message, from, doc, bot, this);
+					break;
 				case States.WAITING_FOR_AMOUNT:
-				{
-					if (message.getText() != null && message.getText().equals(Messages.RETURN_TO_MAIN))
-					{
-						sendStateMessage(States.MAIN_MENU, message, from);
-						goToState(from, States.MAIN_MENU);
-					}
-					ArrayList<Integer> list = new ArrayList<>();
-					Scanner scanner = new Scanner(message.getText());
-					while (scanner.hasNextInt())
-					{
-						list.add(scanner.nextInt());
-					}
-					if (!list.isEmpty())
-					{
-						int coins = doc.getInteger("coins");
-						int previousState = doc.getInteger("previous_state");
-						if (previousState == States.WAITING_FOR_POST)
-						{
-							if (list.get(0) * visitFactor > coins)
-							{
-								
-								message.setText(Messages.AMOUNT_EXCEEDS);
-								botInterface.sendMessage(message);
-							}
-							else
-							{
-								Document newDoc = new Document("$set", new Document("order_amounts", list)
-										.append("state", States.CONFIRM_VIEW_ORDER));
-								message.setText(
-										Messages.CONFIRM_VIEW_ORDER.replace("{amount}", list.get(0) + "").replace
-												("{value}", list.get(0) * visitFactor + ""));
-								message.setReply_markup(Keyboards.CONFIRM);
-								botInterface.sendMessage(message);
-								dbDriver.updateUser(from, newDoc);
-							}
-						}
-
-//						else if (previousState == States.)
-						//TODO add channel
-					}
-				}
-				break;
+					getAmount(message, from, doc);
+					break;
 				case States.CONFIRM_VIEW_ORDER:
-				{
-					String text = message.getText();
-					if (text != null)
-					{
-						if (text.equals(Messages.YES))
-						{
-							int previous_state = doc.getInteger("previous_state");
-							
-							if (previous_state == States.WAITING_FOR_POST)
-							{
-								ArrayList temp = (ArrayList) (doc.get("temp"));
-								ArrayList order_amounts = (ArrayList) (doc.get("order_amounts"));
-								dbDriver.insertNewPostViewOrder(from, (long) temp.get(0), (int) temp.get(1), (int)
-										order_amounts.get(0));
-								message.setText(Messages.REQUEST_DONE);
-								botInterface.sendMessage(message);
-								sendStateMessage(States.MAIN_MENU, message, from);
-								goToState(from, States.MAIN_MENU);
-							}
-							else if (previous_state == States.WAITING_FOR_CHANNEL)
-							{
-								//TODO add channel
-							}
-							
-						}
-						else if (text.equals((Messages.NO)))
-						{
-							sendStateMessage(States.MAIN_MENU, message, from);
-							goToState(from, States.MAIN_MENU);
-						}
-					}
-				}
+					confirmOrder(message, from, doc);
+					break;
+//				default:
+//					if (message.hasText() && message.getText().contains("/start"))
+//					{
+//						sendStateMessage(States.MAIN_MENU, doc, from);
+//						goToState(from, States.MAIN_MENU);
+//					}
 			}
 		}
 		catch (Result result)
@@ -306,9 +89,153 @@ public class EventProcessor extends UserInterface
 		}
 	}
 	
-	private void goToNextPost (Message message, User from, Document user) throws SuspendExecution,
-			Throwable
+	public Document getUser (Message message, User from) throws SuspendExecution, MongoException
 	{
+		Document doc = dbDriver.getUser(from.getId());
+		if (doc == null)
+		{
+			String text = message.getText();
+			if (message.hasText() && text.startsWith("/start"))
+			{
+				Scanner scanner = new Scanner(text);
+				scanner.next();
+				if (scanner.hasNextInt())
+				{
+					int referrerID = scanner.nextInt();
+					doc = dbDriver.insertUser(from, referrerID);
+				}
+				else
+				{
+					doc = dbDriver.insertUser(from);
+				}
+			}
+			else
+			{
+				doc = dbDriver.insertUser(from);
+			}
+		}
+		return doc;
+	}
+	
+	public void getAmount (Message message, User from, Document doc) throws SuspendExecution, Result
+	{
+		if (!message.hasText())
+		{
+			return;
+		}
+		if (message.getText().equals(Messages.RETURN_TO_MAIN))
+		{
+			sendStateMessage(States.MAIN_MENU, doc, from);
+			goToState(from, States.MAIN_MENU);
+		}
+		ArrayList<Integer> list = new ArrayList<>();
+		Scanner scanner = new Scanner(message.getText());
+		while (scanner.hasNextInt())
+		{
+			list.add(scanner.nextInt());
+		}
+		if (!list.isEmpty())
+		{
+			int coins = doc.getInteger("coins");
+			int previousState = doc.getInteger("previous_state");
+			if (previousState == States.WAITING_FOR_POST)
+			{
+				viewEntity.getAmount(message, from, list, coins, botInterface);
+			}
+//						else if (previousState == States.)
+			//TODO add channel
+		}
+	}
+	
+	public void welCome (Message message, User from) throws SuspendExecution, Result
+	{
+		String welcome = Messages.WELCOME;
+		if (from.hasFirst_name())
+		{
+			welcome = welcome.replace("{first}", from.getFirst_name());
+		}
+		else
+		{
+			welcome = welcome.replace("{first}", "");
+		}
+		if (from.hasLast_name())
+		{
+			welcome = welcome.replace("{last}", from.getLast_name());
+		}
+		else
+		{
+			welcome = welcome.replace("{last}", "");
+		}
+		message.setText(welcome);
+		message.setReply_markup(Keyboards.GET_PHONE);
+		botInterface.sendMessage(message);
+		dbDriver.updateUser(from, new Document("$set", new Document("state", States
+				.WAITING_FOR_PHONE_NUMBER)));
+	}
+	
+	public void confirmOrder (Message message, User from, Document doc) throws SuspendExecution, Result
+	{
+		String text = message.getText();
+		if (text != null)
+		{
+			if (text.equals(Messages.YES))
+			{
+				int previous_state = doc.getInteger("previous_state");
+				if (previous_state == States.WAITING_FOR_POST)
+				{
+					viewEntity.confirmOrder(message, from, doc, botInterface, this);
+				}
+				else if (previous_state == States.WAITING_FOR_CHANNEL)
+				{
+					//TODO add channel
+				}
+			}
+			else if (text.equals((Messages.NO)))
+			{
+				sendStateMessage(States.MAIN_MENU, doc, from);
+				goToState(from, States.MAIN_MENU);
+			}
+		}
+	}
+	
+	public void processMainMenu (Message message, User from, Document doc)
+			throws MongoException, SuspendExecution, Result
+	{
+		if (!message.hasText())
+		{
+			return;
+		}
+		String choice = message.getText();
+		if (choice.equals(Messages.REGISTER_POST))
+		{
+			int coins = doc.getInteger("coins");
+			if (coins < 2)
+			{
+				message.setText(Messages.LOW_CREDITS);
+				botInterface.sendMessage(message);
+				sendStateMessage(States.MAIN_MENU, doc, from);
+				goToState(from, States.MAIN_MENU);
+			}
+			else
+			{
+				sendStateMessage(States.WAITING_FOR_POST, doc, from);
+				dbDriver.updateUser(from, new Document("$set",
+				                                       new Document("state", States.WAITING_FOR_POST)
+				                    )
+				                   );
+			}
+		}
+		else if (choice.equals(Messages.VIEW_POSTS))
+		{
+			goToNextPost(from, doc);
+		}
+		//TODO other choices
+	}
+	
+	void goToNextPost (User from, Document user)
+			throws SuspendExecution, MongoException, Result
+	{
+		Message message = new Message().setChat(new Chat().setId(from.getId()));
 		Document newDoc = dbDriver.nextPost(from.getId());
 		if (newDoc != null)
 		{
@@ -352,33 +279,39 @@ public class EventProcessor extends UserInterface
 					Logger.ERROR(result);
 					Logger.DEBUG("Error forwarding post to user");
 					Logger.TRACE(from);
-					Logger.dumpAndSend(bot);
+					try
+					{
+						Logger.dumpAndSend(bot);
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+					}
 					return;
 				}
 				dbDriver.errorSendingPost(chatID, messageID);
-				goToNextPost(message, from, user);
+				goToNextPost(from, user);
 			}
 			Document updateDoc = new Document("temp", new Document("upsert", upsert)
-					.append("chatID", chatID)
-					.append("messageID", messageID)
-					.append("postReqID", postReqID));
+					.append("chatID", chatID).append("messageID", messageID).append("postReqID", postReqID));
 			goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
 		}
 		else
 		{
 			message.setText(Messages.NO_POSTS_NOW);
 			botInterface.sendMessage(message);
-			sendStateMessage(States.MAIN_MENU, message, from);
+			sendStateMessage(States.MAIN_MENU, user, from);
 			goToState(from, States.MAIN_MENU);
 		}
 	}
 	
-	private void sendStateMessage (int state, Message message, User from) throws SuspendExecution, Result
+	protected void sendStateMessage (int state, Document doc, User from) throws SuspendExecution, Result
 	{
+		Message message = new Message().setChat(new Chat().setId(from.getId()));
 		switch (state)
 		{
 			case States.MAIN_MENU:
-				message.setText(Messages.CHOOSE_MAIN_MENU);
+				message.setText(Messages.CHOOSE_MAIN_MENU.replace("{coins}", doc.getInteger("coins") + ""));
 				message.setReply_markup(Keyboards.MAIN_MENU);
 				botInterface.sendMessage(message);
 				break;
@@ -390,12 +323,12 @@ public class EventProcessor extends UserInterface
 		}
 	}
 	
-	private void goToState (User from, int state) throws SuspendExecution, Throwable
+	void goToState (User from, int state) throws SuspendExecution, MongoException
 	{
 		goToState(from, state, null);
 	}
 	
-	private void goToState (User from, int state, Document doc) throws SuspendExecution, Throwable
+	private void goToState (User from, int state, Document doc) throws SuspendExecution, MongoException
 	{
 		if (doc == null)
 		{
@@ -407,6 +340,45 @@ public class EventProcessor extends UserInterface
 		}
 		Document newDoc = new Document("$set", doc);
 		dbDriver.updateUser(from, newDoc);
+	}
+	
+	private void getPhoneNumber (Message message, User from, Document doc)
+			throws SuspendExecution, MongoException, Result
+	{
+		if ((message.hasContact() && message.getContact().getUser_id() == from.getId()))
+		{
+			Contact contact = message.getContact();
+			boolean exists = dbDriver.updatePhoneNumber(from, Long.parseLong(contact.getPhone_number()));
+			if (exists)
+			{
+				message.setText(Messages.WELCOME_BACK);
+			}
+			else
+			{
+				message.setText(Messages.PHONE_NUMBER_CONFIRMED);
+			}
+			Integer referrerID = dbDriver.checkForReferrer(from, referralReward);
+			if (referrerID != null)
+			{
+				Message newMessage = new Message().setChat(new Chat().setId(referrerID))
+						.setText(Messages.NEW_REFERRED_USER.replace("{coins}", referralReward + ""));
+				try
+				{
+					botInterface.sendMessage(newMessage);
+				}
+				catch (Result r)
+				{
+					Logger.WARNING(r);
+				}
+			}
+			botInterface.sendMessage(message);
+			sendStateMessage(States.MAIN_MENU, doc, from);
+		}
+		else
+		{
+			message.setText(Messages.RESEND_PHONE_NUMBER);
+			botInterface.sendMessage(message);
+		}
 	}
 	
 	protected void shutDown ()

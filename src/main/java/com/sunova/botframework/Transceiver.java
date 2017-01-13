@@ -46,13 +46,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Transceiver
 {
-	private static String path = "https://api.telegram.org/bot<token>/";
 	static CloseableHttpClient client;
+	private static String path = "https://api.telegram.org/bot<token>/";
 	private static ArrayList<Transceiver> repos;
-	private ConcurrentLinkedQueue<Fiber> failureQueue;
-	private boolean isUsingWebhook;
-	private boolean isFailure;
-	
+
 	static
 	{
 		repos = new ArrayList<>(5);
@@ -133,9 +130,12 @@ public class Transceiver
 //		client = FiberHttpClientBuilder.create().setHostnameVerifier(verifier).build();
 		
 	}
-	
+
 	AtomicInteger updateIndex;
 	BotInterface botInterface;
+	private ConcurrentLinkedQueue<Fiber> failureQueue;
+	private boolean isUsingWebhook;
+	private boolean isFailure;
 	private boolean shutDown;
 	private UpdatePuller updatePuller;
 	private Bot bot;
@@ -225,6 +225,7 @@ public class Transceiver
 		{
 			System.err.println(e.toString());
 		}
+		updatePuller.start();
 		daemon.start();
 	}
 	
@@ -242,7 +243,7 @@ public class Transceiver
 		}
 	}
 	
-	protected Result getResult (@NotNull HttpResponse response)
+	protected Result getResult (@NotNull HttpResponse response) throws Result
 	{
 		Result result = null;
 		byte[] byteValue = getResponseByteArray(response);
@@ -253,11 +254,6 @@ public class Transceiver
 		catch (IOException e)
 		{
 			e.printStackTrace();
-		}
-		catch (Result result1)
-		{
-			// TODO: 1/5/2017 decide about result returning logic
-			result = result1;
 		}
 		return result;
 	}
@@ -304,6 +300,35 @@ public class Transceiver
 			Result result = getResult(client.execute(req));
 			botInterface.processUpdates(result);
 		}
+		catch (Result r)
+		{
+			if (r.getError_code() == 409)
+			{
+				try
+				{
+					boolean success = disableWebhook();
+					if (success)
+					{
+						System.err.println("Couldn't get updates by polling, so" +
+								                   "webhook is disabled");
+					}
+					else
+					{
+						System.err.println("Can't get updates by polling and can't disbale webhook either");
+						//TODO complete re-connecting mechanism
+					}
+				}
+				catch (InterruptedException e)
+				{
+					e.printStackTrace();
+				}
+			}
+			else
+			{
+				r.printStackTrace();
+			}
+			
+		}
 		catch (IOException e)
 		{
 			e.printStackTrace();
@@ -311,7 +336,7 @@ public class Transceiver
 	}
 	
 	
-	Result execute (HttpUriRequest request) throws SuspendExecution
+	Result execute (HttpUriRequest request) throws SuspendExecution, Result
 	{
 //		System.out.println("Transceiver executing request");
 		int tryCount = 3;
@@ -406,7 +431,7 @@ public class Transceiver
 			if (!testWebhook(webhookURL + "test"))
 			{
 				System.err.println("Webhook is not responding");
-				return false;
+				success = false;
 			}
 			try
 			{
@@ -416,21 +441,19 @@ public class Transceiver
 				                                                );
 				ByteBuffer buffer = ByteBuffer.allocate((int) channel.size());
 				channel.read(buffer, 0);
-				entityBuilder
-						.addBinaryBody("certificate", buffer.array(), ContentType.APPLICATION_OCTET_STREAM, "cert" +
-								".pem");
+				entityBuilder.addBinaryBody(
+						"certificate", buffer.array(), ContentType.APPLICATION_OCTET_STREAM, "cert" + ".pem");
 			}
 			catch (Throwable e)
 			{
 				e.printStackTrace();
 			}
+			StringBody sb = new StringBody(webhookURL, ContentType.TEXT_PLAIN);
+			entityBuilder.addPart("url", sb);
+			HttpEntity entity = entityBuilder.build();
+			webHookInitRequest.setEntity(entity);
 		}
-		StringBody sb = new StringBody(webhookURL,
-		                               ContentType.TEXT_PLAIN
-		);
-		entityBuilder.addPart("url", sb);
-		HttpEntity entity = entityBuilder.build();
-		webHookInitRequest.setEntity(entity);
+		success = false;
 		while (tryCount-- > 0)
 		{
 			try
@@ -445,22 +468,6 @@ public class Transceiver
 				}
 				System.out.println(EntityUtils.toString(response.getEntity()));
 				success = true;
-				if (isDisableOperation)
-				{
-					if (updatePuller.isInterrupted())
-					{
-						updatePuller.unpark();
-					}
-					else if (!updatePuller.isAlive())
-					{
-						updatePuller.start();
-					}
-				}
-				else if (!updatePuller.isInterrupted() && updatePuller.isAlive())
-				{
-					updatePuller.interrupt();
-				}
-				response.close();
 				break;
 			}
 			catch (IOException | InterruptedException e)
@@ -468,8 +475,23 @@ public class Transceiver
 				e.printStackTrace();
 			}
 		}
-		isUsingWebhook = success && !isDisableOperation;
-		return success;
+		if (success)
+		{
+			isUsingWebhook = !isDisableOperation;
+			if (isDisableOperation)
+			{
+				if (updatePuller.isInterrupted())
+				{
+					updatePuller.unpark();
+				}
+			}
+			else if (!updatePuller.isInterrupted())
+			{
+				updatePuller.interrupt();
+			}
+			return true;
+		}
+		return false;
 	}
 	
 	void shutDown () throws SuspendExecution, InterruptedException
@@ -491,21 +513,6 @@ public class Transceiver
 	public Bot getBot ()
 	{
 		return bot;
-	}
-	
-	private class UpdatePuller extends Fiber<Void>
-	{
-		@Override
-		protected Void run () throws InterruptedException, SuspendExecution
-		{
-			while (!shutDown)
-			{
-				sleep(750);
-				int updateIndex = Transceiver.this.updateIndex.get();
-				getUpdates(updateIndex);
-			}
-			return null;
-		}
 	}
 	
 	public boolean testWebhook () throws SuspendExecution
@@ -532,11 +539,28 @@ public class Transceiver
 		return false;//false;
 	}
 	
+	private class UpdatePuller extends Fiber<Void>
+	{
+		@Override
+		protected Void run () throws InterruptedException, SuspendExecution
+		{
+			sleep(1000);
+			while (!shutDown)
+			{
+				sleep(750);
+				int updateIndex = Transceiver.this.updateIndex.get();
+				getUpdates(updateIndex);
+			}
+			return null;
+		}
+	}
+	
 	private class KeepAliveDaemon extends Fiber<Void>
 	{
 		@Override
 		protected Void run () throws SuspendExecution, InterruptedException
 		{
+			sleep(2000);
 			while (!shutDown)
 			{
 				sleep(2000);

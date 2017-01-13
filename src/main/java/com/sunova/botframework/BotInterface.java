@@ -343,6 +343,7 @@ public class BotInterface
 		{
 			List<NameValuePair> list = new ArrayList<>(3);
 			list.add(new BasicNameValuePair("chat_id", message.getChat().getId() + ""));
+			
 			list.add(new BasicNameValuePair("from_chat_id", message.getForward_from_chat().getId() + ""));
 			list.add(new BasicNameValuePair("message_id", message.getForward_from_message_id() + ""));
 //			ReplyMarkup markup = message.getReply_markup();

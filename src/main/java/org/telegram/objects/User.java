@@ -9,14 +9,14 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 public class User implements TObject
 {
 	
-	private int id;
-	private String first_name;
-	private String last_name;
-	private String username;
 	//These fields are not official fields are used for personal use
 	public static final byte ADMIN = 1;
 	public static final byte FREE_USER = 2;
 	public static final byte PREMIUM_USER = 3;
+	private int id;
+	private String first_name;
+	private String last_name;
+	private String username;
 	
 	@JsonGetter ("id")
 	public int getId ()
@@ -44,6 +44,11 @@ public class User implements TObject
 		return this;
 	}
 	
+	public boolean hasFirst_name ()
+	{
+		return first_name != null;
+	}
+	
 	@JsonGetter ("last_name")
 	public String getLast_name ()
 	{
@@ -55,6 +60,11 @@ public class User implements TObject
 	{
 		this.last_name = last_name;
 		return this;
+	}
+	
+	public boolean hasLast_name ()
+	{
+		return last_name != null;
 	}
 	
 	@JsonGetter ("username")

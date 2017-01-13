@@ -356,17 +356,37 @@ public class Message implements TObject
 		return this;
 	}
 	
+	public boolean isForwarded ()
+	{
+		return !(forward_from_chat == null && forward_from == null);
+	}
+	
+	public boolean isForwardedFromChannel ()
+	{
+		return forward_from_chat != null;
+	}
+	
+	public boolean isForwardedFromUser ()
+	{
+		return forward_from != null;
+	}
+	
 	@JsonGetter ("contact")
 	public Contact getContact ()
 	{
 		return contact;
 	}
-	
+
 	@JsonGetter ("contact")
 	public Message setContact (Contact contact)
 	{
 		this.contact = contact;
 		return this;
+	}
+	
+	public boolean hasContact ()
+	{
+		return contact != null;
 	}
 	
 	@JsonGetter ("reply_markup")
@@ -421,6 +441,10 @@ public class Message implements TObject
 		return this;
 	}
 	
+	public boolean hasText ()
+	{
+		return text != null;
+	}
 	@JsonGetter ("reply_to_message")
 	public Message getReply_to_message ()
 	{

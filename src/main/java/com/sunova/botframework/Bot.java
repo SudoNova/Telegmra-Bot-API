@@ -52,10 +52,10 @@ public class Bot
 	PrivateKey privateKey;
 	String webhookURL;
 	String resourcesPath;
+	UserInterface userInterface;
 	private BotInterface botInterface;
 	private WebHook webHook;
 	private Transceiver transceiver;
-	UserInterface userInterface;
 	private ServantFiber requestHandler;
 	
 	private Bot ()
@@ -138,7 +138,6 @@ public class Bot
 		{
 			temp.mkdirs();
 		}
-		
 		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
 		//May be added to a static constructor
 		try

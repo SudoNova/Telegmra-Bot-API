@@ -3,7 +3,6 @@ package com.sunova.botframework;
 import co.paralleluniverse.fibers.Fiber;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.fibers.io.FiberFileChannel;
-import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
@@ -25,8 +24,9 @@ import java.nio.charset.Charset;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.*;
-import java.util.concurrent.locks.ReadWriteLock;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
@@ -35,6 +35,8 @@ import java.util.concurrent.locks.ReadWriteLock;
 public class BotInterface
 {
 	private static ArrayList<BotInterface> repos;
+	private boolean shutDown;
+	private UserInterface processor;
 	
 	static
 	{
@@ -42,25 +44,11 @@ public class BotInterface
 	}
 	
 	Transceiver transceiver;
-	/**
-	 * Repository for incoming updates
-	 */
-	private HashMap<Integer, AbstractMap.SimpleEntry<Update, Long>> updateRepos;
-	
-	private boolean shutDown;
-	private UserInterface processor;
-	private ReadWriteLock updateReposLock;
-	
 	
 	private BotInterface (Bot bot)
 	{
 		transceiver = Transceiver.getInstance(bot);
-		updateRepos = new HashMap<>();
-		
-		updateReposLock = new ReentrantReadWriteLock();
 		processor = bot.userInterface;
-		
-		new Servant().start();
 	}
 	
 	static BotInterface getInstance (Bot bot)
@@ -245,7 +233,8 @@ public class BotInterface
 			}
 			if (result.getError_code() == 429)
 			{
-				System.err.println("Your bot is hitting limits. Slow down!");
+				System.err.println(result.getDescription());
+//				System.err.println("Your bot is hitting limits. Slow down!");
 				//TODO add method
 				try
 				{
@@ -264,32 +253,19 @@ public class BotInterface
 	
 	protected void processUpdate (Update update)
 	{
-		
 		new Fiber<Void>()
 		{
 			@Override
 			protected Void run () throws InterruptedException, SuspendExecution
 			{
 				int updateID = update.getUpdate_id();
-				updateReposLock.writeLock().lock();
-				if (!updateRepos.containsKey(updateID))
+				int index = transceiver.updateIndex.get();
+				int currentIndex = Math.max(index, updateID + 1);
+				transceiver.updateIndex.compareAndSet(index, currentIndex);
+				if (update.containsMessage())
 				{
-					updateRepos.put(updateID, new AbstractMap.SimpleEntry<>(update, System.currentTimeMillis()));
-					updateReposLock.writeLock().unlock();
-					int index = transceiver.updateIndex.get();
-					int currentIndex = Math.max(index, updateID + 1);
-					transceiver.updateIndex.compareAndSet(index, currentIndex);
-					if (update.containsMessage())
-					{
-						processor.onMessage(update.getMessage());
-					}
-					
+					processor.onMessage(update.getMessage());
 				}
-				else
-				{
-					updateReposLock.writeLock().unlock();
-				}
-				
 				return null;
 			}
 		}.start();
@@ -374,41 +350,6 @@ public class BotInterface
 		throw new UnsupportedHttpVersionException();
 	}
 	
-	private class Servant extends Fiber<Void>
-	{
-		@Override
-		protected Void run () throws SuspendExecution, InterruptedException
-		{
-			int waitFactor = 1;
-			while (!shutDown)
-			{
-				sleep(20000 / waitFactor);
-				if (updateReposLock.writeLock().tryLock())
-				{
-					Iterator<Map.Entry<Integer, AbstractMap.SimpleEntry<Update, Long>>> it = updateRepos.entrySet()
-							.iterator();
-					while (it.hasNext())
-					{
-						Map.Entry<Integer, AbstractMap.SimpleEntry<Update, Long>> i = it.next();
-						AbstractMap.SimpleEntry<Update, Long> j = i.getValue();
-						long lastAccessTime = j.getValue();
-						long currentTime = System.currentTimeMillis();
-						if (currentTime - lastAccessTime > 120000)
-						{
-							it.remove();
-						}
-					}
-					updateReposLock.writeLock().unlock();
-					waitFactor = 1;
-				}
-				else
-				{
-					waitFactor++;
-				}
-			}
-			return null;
-		}
-	}
 }
 
 

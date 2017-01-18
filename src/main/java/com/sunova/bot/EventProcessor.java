@@ -22,9 +22,10 @@ import java.util.Scanner;
  */
 public class EventProcessor extends UserInterface
 {
-	static final int referralReward = 20;
+	static final int referralReward = 40;
 	private MongoDBDriver dbDriver;
 	private ViewEntity viewEntity;
+	User botUser = new User().setUsername("ViewMemberTestBot");
 	
 	public EventProcessor ()
 	{
@@ -60,6 +61,29 @@ public class EventProcessor extends UserInterface
 					break;
 				case States.CONFIRM_VIEW_ORDER:
 					confirmOrder(message, from, doc);
+					break;
+				case States.TRACK_CHOOSE:
+					if (!message.hasText())
+					{
+						return;
+					}
+					String choice = message.getText();
+					if (choice.equals(Messages.TRACK_POST_REQUESTS))
+					{
+						viewEntity.trackRequests(from, message, doc, botInterface, this, true);
+					}
+					else if (choice.equals(Messages.TRACK_MEMBER_REQUESTS))
+					{
+						
+					}
+					else if (choice.equals(Messages.RETURN_TO_MAIN) || choice.startsWith("/start"))
+					{
+						sendStateMessage(States.MAIN_MENU, doc, from);
+						goToState(from, States.MAIN_MENU);
+					}
+					break;
+				case States.TRACK_POSTS:
+					viewEntity.trackRequests(from, message, doc, botInterface, this, false);
 					break;
 //				default:
 //					if (message.hasText() && message.getText().contains("/start"))
@@ -123,10 +147,10 @@ public class EventProcessor extends UserInterface
 		{
 			return;
 		}
-		if (message.getText().equals(Messages.RETURN_TO_MAIN))
+		if (message.getText().equals(Messages.RETURN_TO_MAIN) || message.getText().startsWith("/start"))
 		{
 			sendStateMessage(States.MAIN_MENU, doc, from);
-			goToState(from, States.MAIN_MENU);
+			goToState(from, States.MAIN_MENU, null, new Document("temp", "").append("previous_state", ""));
 		}
 		ArrayList<Integer> list = new ArrayList<>();
 		Scanner scanner = new Scanner(message.getText());
@@ -190,10 +214,12 @@ public class EventProcessor extends UserInterface
 					//TODO add channel
 				}
 			}
-			else if (text.equals((Messages.NO)))
+			else if (text.equals((Messages.NO)) || text.startsWith("/start"))
 			{
 				sendStateMessage(States.MAIN_MENU, doc, from);
-				goToState(from, States.MAIN_MENU);
+				goToState(from, States.MAIN_MENU, null, new Document("order_amounts", "").append("temp", "")
+						.append("previous_state", ""));
+				
 			}
 		}
 	}
@@ -206,7 +232,7 @@ public class EventProcessor extends UserInterface
 			return;
 		}
 		String choice = message.getText();
-		if (choice.equals(Messages.REGISTER_POST))
+		if (choice.equals(Messages.POST_ORDER))
 		{
 			int coins = doc.getInteger("coins");
 			if (coins < 2)
@@ -225,9 +251,26 @@ public class EventProcessor extends UserInterface
 				                   );
 			}
 		}
-		else if (choice.equals(Messages.VIEW_POSTS))
+		else if (choice.equals(Messages.POST_VIEW))
 		{
 			goToNextPost(from, doc);
+		}
+		else if (choice.equals(Messages.TRACK))
+		{
+			sendStateMessage(States.TRACK_CHOOSE, doc, from);
+			goToState(from, States.TRACK_CHOOSE);
+		}
+		else if (choice.startsWith("/start"))
+		{
+			sendStateMessage(States.MAIN_MENU, doc, from);
+//			goToState(from, States.MAIN_MENU);
+		}
+		else if (choice.equals(Messages.REFERRAL_LINK))
+		{
+			String text = Messages.REFERRAL_NOTE.replace("{coins}", referralReward + "")
+					+ "https://telegram.me/" + botUser.getUsername() + "?start=" + doc.getInteger("userID");
+			message.setText(text);
+			botInterface.sendMessage(message);
 		}
 		//TODO other choices
 	}
@@ -239,7 +282,7 @@ public class EventProcessor extends UserInterface
 		Document newDoc = dbDriver.nextPost(from.getId());
 		if (newDoc != null)
 		{
-			ReplyKeyboardMarkup keyboard = Keyboards.CONFIRM_VIEW;
+			ReplyKeyboardMarkup keyboard = Keyboards.POST_CONFIRM_ORDER;
 			int coins = user.getInteger("coins");
 			keyboard.getKeyboard()[0][0].setText(Messages.VIEW_AGAIN.replace
 					("{coins}", coins + ""));
@@ -292,14 +335,15 @@ public class EventProcessor extends UserInterface
 				dbDriver.errorSendingPost(chatID, messageID);
 				goToNextPost(from, user);
 			}
-			Document updateDoc = new Document("temp", new Document("upsert", upsert)
-					.append("chatID", chatID).append("messageID", messageID).append("postReqID", postReqID));
-			goToState(from, States.CONFIRM_VIEW_POST, updateDoc);
+			Document updateDoc = new Document(new Document("temp", new Document("upsert", upsert)
+					.append("chatID", chatID).append("messageID", messageID).append("postReqID", postReqID)));
+			goToState(from, States.CONFIRM_VIEW_POST, updateDoc, null);
 		}
 		else
 		{
-			message.setText(Messages.NO_POSTS_NOW);
+			message.setText(Messages.POST_NO_POSTS);
 			botInterface.sendMessage(message);
+			dbDriver.closeCursor(from.getId());
 			sendStateMessage(States.MAIN_MENU, user, from);
 			goToState(from, States.MAIN_MENU);
 		}
@@ -311,13 +355,18 @@ public class EventProcessor extends UserInterface
 		switch (state)
 		{
 			case States.MAIN_MENU:
-				message.setText(Messages.CHOOSE_MAIN_MENU.replace("{coins}", doc.getInteger("coins") + ""));
+				message.setText(Messages.MAIN_MENU.replace("{coins}", doc.getInteger("coins") + ""));
 				message.setReply_markup(Keyboards.MAIN_MENU);
 				botInterface.sendMessage(message);
 				break;
 			case States.WAITING_FOR_POST:
-				message.setText(Messages.SEND_POST);
-				message.setReply_markup(Keyboards.SEND_POST);
+				message.setText(Messages.POST_SEND);
+				message.setReply_markup(Keyboards.POST_SEND_ORDER);
+				botInterface.sendMessage(message);
+				break;
+			case States.TRACK_CHOOSE:
+				message.setText(Messages.TRACK_CHOOSE);
+				message.setReply_markup(Keyboards.TRACK_CHOOSE);
 				botInterface.sendMessage(message);
 				break;
 		}
@@ -325,20 +374,25 @@ public class EventProcessor extends UserInterface
 	
 	void goToState (User from, int state) throws SuspendExecution, MongoException
 	{
-		goToState(from, state, null);
+		goToState(from, state, null, null);
 	}
 	
-	private void goToState (User from, int state, Document doc) throws SuspendExecution, MongoException
+	void goToState (User from, int state, Document set, Document unset) throws SuspendExecution, MongoException
 	{
-		if (doc == null)
+		if (set == null)
 		{
-			doc = new Document("state", state);
+			set = new Document("state", state);
 		}
 		else
 		{
-			doc.append("state", state);
+			set.append("state", state);
 		}
-		Document newDoc = new Document("$set", doc);
+		Document newDoc = new Document("$set", set);
+		if (unset != null)
+		{
+			newDoc.append("$unset", unset);
+		}
+		
 		dbDriver.updateUser(from, newDoc);
 	}
 	
@@ -376,7 +430,7 @@ public class EventProcessor extends UserInterface
 		}
 		else
 		{
-			message.setText(Messages.RESEND_PHONE_NUMBER);
+			message.setText(Messages.RESEND_PHONE_NUMBER).setReply_markup(Keyboards.GET_PHONE);
 			botInterface.sendMessage(message);
 		}
 	}

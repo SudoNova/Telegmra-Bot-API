@@ -9,15 +9,17 @@ sourceCompatibility = 1.8
 repositories {
     mavenCentral()
     maven { url "https://jitpack.io" }
+    maven { url "https://oss.sonatype.org/content/repositories/" }
+    maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
 }
-idea {
-    module
-            {
-                downloadJavadoc = true
-                downloadSources = true
-            }
+    idea {
+        module
+                {
+                    downloadJavadoc = true
+                    downloadSources = true
+                }
 
-}
+    }
 configurations {
     quasar
 }
@@ -26,8 +28,10 @@ dependencies {
     compile 'org.apache.httpcomponents:httpasyncclient:4.1.2'
     compile 'org.mongodb:mongodb-driver-async:3.4.0'
     compile 'com.fasterxml.jackson.core:jackson-annotations:2.8.5'
-    compile 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
-    quasar 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
+//    compile 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
+//    quasar 'co.paralleluniverse:quasar-core:0.7.7:jdk8'
+    compile 'co.paralleluniverse:quasar-core:0.7.8-20170117.084120-3'
+    quasar 'co.paralleluniverse:quasar-core:0.7.8-20170117.084120-3'
     compile 'org.jetbrains:annotations:15.0'
     compile 'com.fasterxml.jackson.core:jackson-databind:2.8.5'
     compile 'com.fasterxml.jackson.core:jackson-core:2.8.5'

@@ -35,6 +35,11 @@ public class Logger
 	private final static String ERROR = "ERROR";
 	private static boolean shutDown;
 	
+	public static void makeDumpable ()
+	{
+		//TODO complete this
+	}
+	
 	private enum LEVEL
 	{
 		INFO, TRACE, DEBUG, WARNING, ERROR

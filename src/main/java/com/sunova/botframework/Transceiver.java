@@ -49,7 +49,7 @@ public class Transceiver
 	static CloseableHttpClient client;
 	private static String path = "https://api.telegram.org/bot<token>/";
 	private static ArrayList<Transceiver> repos;
-
+	
 	static
 	{
 		repos = new ArrayList<>(5);
@@ -130,7 +130,7 @@ public class Transceiver
 //		client = FiberHttpClientBuilder.create().setHostnameVerifier(verifier).build();
 		
 	}
-
+	
 	AtomicInteger updateIndex;
 	BotInterface botInterface;
 	private ConcurrentLinkedQueue<Fiber> failureQueue;
@@ -298,30 +298,39 @@ public class Transceiver
 		try
 		{
 			Result result = getResult(client.execute(req));
+			notifySuccess();
 			botInterface.processUpdates(result);
 		}
 		catch (Result r)
 		{
 			if (r.getError_code() == 409)
 			{
-				try
+				if (r.getMessage().contains("can't use getUpdates method while webhook is active"))
 				{
-					boolean success = disableWebhook();
-					if (success)
+					try
 					{
-						System.err.println("Couldn't get updates by polling, so" +
-								                   "webhook is disabled");
+						boolean success = disableWebhook();
+						if (success)
+						{
+							System.err.println("Couldn't get updates by polling, so" +
+									                   "webhook is disabled");
+						}
+						else
+						{
+							System.err.println("Can't get updates by polling and can't disbale webhook either");
+							//TODO complete re-connecting mechanism
+						}
 					}
-					else
+					catch (InterruptedException e)
 					{
-						System.err.println("Can't get updates by polling and can't disbale webhook either");
-						//TODO complete re-connecting mechanism
+						e.printStackTrace();
 					}
 				}
-				catch (InterruptedException e)
+				else if (r.getMessage().contains("terminated by other setWebhook"))
 				{
-					e.printStackTrace();
+					Fiber.park();
 				}
+				
 			}
 			else
 			{
@@ -331,7 +340,6 @@ public class Transceiver
 		}
 		catch (IOException e)
 		{
-			e.printStackTrace();
 		}
 	}
 	
@@ -358,7 +366,6 @@ public class Transceiver
 //		catch (IOException e)
 			catch (IOException e)
 			{
-				e.printStackTrace();
 			}
 			if (tryCount == 0)
 			{
@@ -394,6 +401,7 @@ public class Transceiver
 		isFailure = true;
 		Fiber thisFiber = Fiber.currentFiber();
 		failureQueue.add(thisFiber);
+		System.err.println("Connection failure in one of fibers");
 		Fiber.park();
 		//TODO add code here
 	}
@@ -470,9 +478,13 @@ public class Transceiver
 				success = true;
 				break;
 			}
-			catch (IOException | InterruptedException e)
+			catch (InterruptedException e)
 			{
 				e.printStackTrace();
+			}
+			catch (IOException e)
+			{
+				
 			}
 		}
 		if (success)

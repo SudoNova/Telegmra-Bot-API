@@ -193,7 +193,6 @@ public class Bot
 		}
 		catch (
 				Exception e)
-		
 		{
 			e.printStackTrace();
 		}

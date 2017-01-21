@@ -128,7 +128,6 @@ public class Transceiver
 			System.exit(-1);
 		}
 //		client = FiberHttpClientBuilder.create().setHostnameVerifier(verifier).build();
-		
 	}
 	
 	AtomicInteger updateIndex;
@@ -142,6 +141,7 @@ public class Transceiver
 	private boolean shutdown = false;
 	private JsonParser parser;
 	private KeepAliveDaemon daemon;
+	private long lastUpdateTime;
 	
 	private Transceiver (Bot bot)
 	{
@@ -207,23 +207,9 @@ public class Transceiver
 	
 	void init () throws SuspendExecution
 	{
-		String getIDQuery = path + "getMe";
-		final HttpGet req = new HttpGet(getIDQuery);
-		try
+		if (!test())
 		{
-			HttpResponse response = client.execute(req);
-			byte[] byteValue = getResponseByteArray(response);
-			Object obj = parser.parseResult(byteValue).getResult();
-		}
-		catch (IOException e)
-		{
-			e.printStackTrace();
-			System.err.println("Unable to start bot. Network problems found.");
 			System.exit(-1);
-		}
-		catch (Result e)
-		{
-			System.err.println(e.toString());
 		}
 		updatePuller.start();
 		daemon.start();
@@ -287,7 +273,7 @@ public class Transceiver
 	protected void receiveUpdate (HttpRequest request)
 	{
 		Update result = parseUpdate(request);
-		Logger.TRACE(result);
+		lastUpdateTime = System.currentTimeMillis();
 		botInterface.processUpdate(result);
 	}
 	
@@ -298,6 +284,7 @@ public class Transceiver
 		try
 		{
 			Result result = getResult(client.execute(req));
+			lastUpdateTime = System.currentTimeMillis();
 			notifySuccess();
 			botInterface.processUpdates(result);
 		}
@@ -309,11 +296,15 @@ public class Transceiver
 				{
 					try
 					{
+						if (System.currentTimeMillis() - lastUpdateTime < 2001)
+						{
+							return;
+						}
 						boolean success = disableWebhook();
 						if (success)
 						{
 							System.err.println("Couldn't get updates by polling, so" +
-									                   "webhook is disabled");
+									                   " webhook is disabled");
 						}
 						else
 						{
@@ -330,19 +321,17 @@ public class Transceiver
 				{
 					Fiber.park();
 				}
-				
 			}
 			else
 			{
 				r.printStackTrace();
 			}
-			
 		}
 		catch (IOException e)
 		{
+			
 		}
 	}
-	
 	
 	Result execute (HttpUriRequest request) throws SuspendExecution, Result
 	{
@@ -469,7 +458,7 @@ public class Transceiver
 				response = client.execute(webHookInitRequest);
 				if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
 				{
-					System.err.println(EntityUtils.toString(response.getEntity()));
+//					System.err.println(EntityUtils.toString(response.getEntity()));
 					response.close();
 					Fiber.sleep(1000);
 					continue;
@@ -492,6 +481,7 @@ public class Transceiver
 			isUsingWebhook = !isDisableOperation;
 			if (isDisableOperation)
 			{
+				System.out.println("Webhook is disabled");
 				if (updatePuller.isInterrupted())
 				{
 					updatePuller.unpark();
@@ -499,11 +489,34 @@ public class Transceiver
 			}
 			else if (!updatePuller.isInterrupted())
 			{
+				System.out.println("Webhook is enabled");
 				updatePuller.interrupt();
 			}
 			return true;
 		}
 		return false;
+	}
+	
+	private boolean test () throws SuspendExecution
+	{
+		String getIDQuery = path + "getMe";
+		final HttpGet req = new HttpGet(getIDQuery);
+		try
+		{
+			HttpResponse response = client.execute(req);
+			byte[] byteValue = getResponseByteArray(response);
+			Object obj = parser.parseResult(byteValue).getResult();
+			return true;
+		}
+		catch (IOException e)
+		{
+			return false;
+		}
+		catch (Result e)
+		{
+			System.err.println(e.toString());
+			return false;
+		}
 	}
 	
 	void shutDown () throws SuspendExecution, InterruptedException
@@ -583,7 +596,16 @@ public class Transceiver
 					{
 						enableWebhook(bot.webhookURL);
 					}
+//					else
+//					{
+//						if (System.currentTimeMillis() - lastUpdateTime > 50000)
+//						{
+//							disableWebhook();
+//						}
+//						else
+//						{
 					notifySuccess();
+//						}
 				}
 				else
 				{

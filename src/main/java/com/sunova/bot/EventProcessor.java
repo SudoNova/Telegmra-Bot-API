@@ -25,7 +25,7 @@ public class EventProcessor extends UserInterface
 	static final int referralReward = 40;
 	private MongoDBDriver dbDriver;
 	private ViewEntity viewEntity;
-	User botUser = new User().setUsername("ViewMemberTestBot");
+	User botUser;
 	
 	public EventProcessor ()
 	{
@@ -267,9 +267,18 @@ public class EventProcessor extends UserInterface
 		}
 		else if (choice.equals(Messages.REFERRAL_LINK))
 		{
+			if (botUser == null)
+			{
+				botUser = botInterface.getMe();
+			}
 			String text = Messages.REFERRAL_NOTE.replace("{coins}", referralReward + "")
 					+ "https://telegram.me/" + botUser.getUsername() + "?start=" + doc.getInteger("userID");
 			message.setText(text);
+			botInterface.sendMessage(message);
+		}
+		else if (choice.equals(Messages.CONTACT_US))
+		{
+			message.setText("برای ارتباط با مدیر روبات به @SuNova پیام دهید.");
 			botInterface.sendMessage(message);
 		}
 		//TODO other choices

@@ -6,7 +6,6 @@ import co.paralleluniverse.fibers.io.FiberFileChannel;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
-import org.apache.http.UnsupportedHttpVersionException;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
@@ -334,7 +333,7 @@ public class BotInterface
 //						list.add(new BasicNameValuePair("method", "application/x-www-form-urlencoded"));
 			HttpPost post = new HttpPost();
 			post.setURI(new URI(Transceiver.getPath() + "forwardMessage"));
-			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
+//			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
 			return (Message) sendRequest(post).getResult()[0];
 		}
@@ -345,9 +344,19 @@ public class BotInterface
 		return null; //TODO add status code
 	}
 	
-	public User getUesr () throws SuspendExecution, UnsupportedHttpVersionException
+	public User getMe () throws SuspendExecution, Result
 	{
-		throw new UnsupportedHttpVersionException();
+		try
+		{
+			HttpPost post = new HttpPost();
+			post.setURI(new URI(Transceiver.getPath() + "getMe"));
+			return (User) sendRequest(post).getResult()[0];
+		}
+		catch (URISyntaxException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
 	}
 	
 }

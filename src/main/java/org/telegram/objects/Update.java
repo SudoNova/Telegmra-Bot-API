@@ -37,19 +37,23 @@ public class Update implements TObject
 	}
 	
 	@JsonSetter ("channel_post")
-	public void setChannel_post (Message channel_post)
+	public Update setChannel_post (Message channel_post)
 	{
 		this.channel_post = channel_post;
+		return this;
 	}
 	
+	@JsonGetter ("edited_channel_post")
 	public Message getEdited_channel_post ()
 	{
 		return edited_channel_post;
 	}
 	
-	public void setEdited_channel_post (Message edited_channel_post)
+	@JsonSetter ("edited_channel_post")
+	public Update setEdited_channel_post (Message edited_channel_post)
 	{
 		this.edited_channel_post = edited_channel_post;
+		return this;
 	}
 	
 	@JsonGetter ("update_id")

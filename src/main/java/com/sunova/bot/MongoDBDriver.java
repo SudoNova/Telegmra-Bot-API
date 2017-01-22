@@ -312,8 +312,7 @@ public class MongoDBDriver
 				}
 			}
 			updateUser(from, new Document("$set", new Document("phoneNumber", phoneNumber)
-					           .append("state", States.MAIN_MENU))
-			          );
+					.append("state", States.MAIN_MENU)).append("$unset", new Document("previous_state", "")));
 		}
 		catch (InterruptedException e)
 		{

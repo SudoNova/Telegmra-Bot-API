@@ -576,7 +576,14 @@ public class MongoDBDriver
 	void closeCursor (int userID) throws SuspendExecution
 	{
 		batchMapLock.writeLock().lock();
-		batchMap.remove(userID).close();
+		try
+		{
+			batchMap.remove(userID).close();
+		}
+		catch (NullPointerException e)
+		{
+			
+		}
 		batchMapLock.writeLock().unlock();
 	}
 	
@@ -732,28 +739,26 @@ public class MongoDBDriver
 				protected void requestAsync ()
 				{
 					Long currentTime = System.currentTimeMillis();
-					Document doc = new Document(
-							"$inc", new Document("orders.$.viewCount", 1).append("orders.$.remaining", -1))
-							.append("$set", new Document("orders.$.endDate", currentTime));
+					Document inc = new Document("orders.$.viewCount", 1).append("orders.$.remaining", -1);
+					Document set = new Document("orders.$.endDate", currentTime);
+					Document doc = new Document("$inc", inc);
 					if (upsert)
 					{
-						doc.append("$push", new Document
-								("visits", new Document("userID", from.getId())
-										.append("date", System.currentTimeMillis())));
+						Document push = new Document("visits", new Document("userID", from.getId())
+								.append("date", System.currentTimeMillis()));
+						doc.append("$push", push);
 					}
 					else
 					{
-//						doc.append("$set", new Document("visits.$.date", currentTime)
-//								.append("orders.$.endDate", currentTime));
-						doc.append("visits.$.date", currentTime);
+						set.append("visits.$.date", currentTime);
 					}
+					doc.append("$set", set);
 					Document filter = new Document("chatID", chatID)
 							.append("messageID", messageID).append("orders.postReqID", postReqID);
 					if (!upsert)
 					{
 						filter.append("visits.userID", from.getId());
 					}
-					//				filter = new Document("$and", Collections.singletonList(filter));
 					posts.updateOne(
 							filter, doc, (r, t) ->
 							{
@@ -778,7 +783,6 @@ public class MongoDBDriver
 											}
 										}
 								                      );
-								
 							}
 					               );
 				}

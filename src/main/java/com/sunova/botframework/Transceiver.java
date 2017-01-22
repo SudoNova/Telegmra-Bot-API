@@ -481,7 +481,7 @@ public class Transceiver
 			isUsingWebhook = !isDisableOperation;
 			if (isDisableOperation)
 			{
-				System.out.println("Webhook is disabled");
+//				System.out.println("Webhook is disabled");
 				if (updatePuller.isInterrupted())
 				{
 					updatePuller.unpark();
@@ -489,7 +489,7 @@ public class Transceiver
 			}
 			else if (!updatePuller.isInterrupted())
 			{
-				System.out.println("Webhook is enabled");
+//				System.out.println("Webhook is enabled");
 				updatePuller.interrupt();
 			}
 			return true;

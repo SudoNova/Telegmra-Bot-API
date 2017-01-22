@@ -23,9 +23,9 @@ import java.util.Scanner;
 public class EventProcessor extends UserInterface
 {
 	static final int referralReward = 40;
+	User botUser;
 	private MongoDBDriver dbDriver;
 	private ViewEntity viewEntity;
-	User botUser;
 	
 	public EventProcessor ()
 	{
@@ -354,7 +354,7 @@ public class EventProcessor extends UserInterface
 			botInterface.sendMessage(message);
 			dbDriver.closeCursor(from.getId());
 			sendStateMessage(States.MAIN_MENU, user, from);
-			goToState(from, States.MAIN_MENU);
+			goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
 		}
 	}
 	

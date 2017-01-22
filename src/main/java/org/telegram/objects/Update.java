@@ -11,14 +11,46 @@ public class Update implements TObject
 {
 	private int update_id;
 	private Message message;
-	@JsonIgnore (true)
+	
 	private Message edited_message;
-	@JsonIgnore (true)
 	private Message channel_post;
-	@JsonIgnore (true)
 	private Message edited_channel_post;
 	
 	//TODO this class is incomplete
+	@JsonGetter ("edited_message")
+	public Message getEdited_message ()
+	{
+		return edited_message;
+	}
+	
+	@JsonSetter ("edited_message")
+	public Update setEdited_message (Message edited_message)
+	{
+		this.edited_message = edited_message;
+		return this;
+	}
+	
+	@JsonGetter ("channel_post")
+	public Message getChannel_post ()
+	{
+		return channel_post;
+	}
+	
+	@JsonSetter ("channel_post")
+	public void setChannel_post (Message channel_post)
+	{
+		this.channel_post = channel_post;
+	}
+	
+	public Message getEdited_channel_post ()
+	{
+		return edited_channel_post;
+	}
+	
+	public void setEdited_channel_post (Message edited_channel_post)
+	{
+		this.edited_channel_post = edited_channel_post;
+	}
 	
 	@JsonGetter ("update_id")
 	public int getUpdate_id ()

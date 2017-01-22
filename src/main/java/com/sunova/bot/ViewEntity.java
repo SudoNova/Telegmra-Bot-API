@@ -55,7 +55,7 @@ public class ViewEntity
 			{
 				dbDriver.closeCursor(from.getId());
 				processor.sendStateMessage(States.MAIN_MENU, doc, from);
-				processor.goToState(from, States.MAIN_MENU);
+				processor.goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
 			}
 		}
 	}
@@ -131,7 +131,7 @@ public class ViewEntity
 				{
 					return;
 				}
-				int skip = doc.getInteger("temp") - 10;
+				int skip = doc.getInteger("temp");
 				List<Document> list = dbDriver.nextViewOrderList(from.getId(), skip);
 				if (list == null || list.size() < choice)
 				{

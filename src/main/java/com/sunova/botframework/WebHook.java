@@ -18,12 +18,13 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 //TODO make it asynchronous and more flexible and use singleton pattern
+
 /**
  * Created by HellScre4m on 6/1/2016.
  */
 public class WebHook
 {
-	protected static final int serverPort = 8443;
+	protected static final int serverPort = 443;
 	private static ArrayList<WebHook> repos;
 	
 	static

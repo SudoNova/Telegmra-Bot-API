@@ -273,6 +273,7 @@ class Transceiver
 	protected void receiveUpdate (HttpRequest request)
 	{
 		Update result = parseUpdate(request);
+		notifySuccess();
 		lastUpdateTime = System.currentTimeMillis();
 		botInterface.processUpdate(result);
 	}
@@ -479,19 +480,11 @@ class Transceiver
 		if (success)
 		{
 			isUsingWebhook = !isDisableOperation;
-			if (isDisableOperation)
+			if (isDisableOperation && updatePuller.isInterrupted())
 			{
-//				System.out.println("Webhook is disabled");
-				if (updatePuller.isInterrupted())
-				{
-					updatePuller.unpark();
-				}
+				updatePuller.unpark();
 			}
-			else if (!updatePuller.isInterrupted())
-			{
-//				System.out.println("Webhook is enabled");
-				updatePuller.interrupt();
-			}
+			notifySuccess();
 			return true;
 		}
 		return false;
@@ -559,7 +552,7 @@ class Transceiver
 		}
 		catch (Exception e)
 		{
-			
+			// Do nothing
 		}
 		return false;//false;
 	}
@@ -569,12 +562,16 @@ class Transceiver
 		@Override
 		protected Void run () throws InterruptedException, SuspendExecution
 		{
-			sleep(1000);
+			disableWebhook();
 			while (!shutDown)
 			{
-				sleep(750);
+				if (isUsingWebhook)
+				{
+					park();
+				}
 				int updateIndex = Transceiver.this.updateIndex.get();
 				getUpdates(updateIndex);
+				sleep(750);
 			}
 			return null;
 		}
@@ -585,7 +582,6 @@ class Transceiver
 		@Override
 		protected Void run () throws SuspendExecution, InterruptedException
 		{
-			sleep(2000);
 			while (!shutDown)
 			{
 				sleep(2000);
@@ -596,16 +592,7 @@ class Transceiver
 					{
 						enableWebhook(bot.webhookURL);
 					}
-//					else
-//					{
-//						if (System.currentTimeMillis() - lastUpdateTime > 50000)
-//						{
-//							disableWebhook();
-//						}
-//						else
-//						{
 					notifySuccess();
-//						}
 				}
 				else
 				{

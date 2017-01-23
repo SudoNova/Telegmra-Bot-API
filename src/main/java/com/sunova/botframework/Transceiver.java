@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Created by HellScre4m on 4/20/2016.
  */
-public class Transceiver
+class Transceiver
 {
 	static CloseableHttpClient client;
 	private static String path = "https://api.telegram.org/bot<token>/";

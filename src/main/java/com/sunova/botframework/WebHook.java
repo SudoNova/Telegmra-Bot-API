@@ -22,7 +22,7 @@ import java.util.ArrayList;
 /**
  * Created by HellScre4m on 6/1/2016.
  */
-public class WebHook
+class WebHook
 {
 	protected static final int serverPort = 443;
 	private static ArrayList<WebHook> repos;

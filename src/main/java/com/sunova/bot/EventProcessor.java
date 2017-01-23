@@ -14,7 +14,6 @@ import org.telegram.objects.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -253,7 +252,7 @@ public class EventProcessor extends UserInterface
 		}
 		else if (choice.equals(Messages.POST_VIEW))
 		{
-			goToNextPost(from, doc);
+			viewEntity.goToNextPost(from, doc, botInterface, bot, this);
 		}
 		else if (choice.equals(Messages.TRACK))
 		{
@@ -282,80 +281,6 @@ public class EventProcessor extends UserInterface
 			botInterface.sendMessage(message);
 		}
 		//TODO other choices
-	}
-	
-	void goToNextPost (User from, Document user)
-			throws SuspendExecution, MongoException, Result
-	{
-		Message message = new Message().setChat(new Chat().setId(from.getId()));
-		Document newDoc = dbDriver.nextPost(from.getId());
-		if (newDoc != null)
-		{
-			ReplyKeyboardMarkup keyboard = Keyboards.POST_CONFIRM_ORDER;
-			int coins = user.getInteger("coins");
-			keyboard.getKeyboard()[0][0].setText(Messages.VIEW_AGAIN.replace
-					("{coins}", coins + ""));
-			message.setText(Messages.VIEW_NOTE);
-			message.setReply_markup(keyboard);
-			botInterface.sendMessage(message);
-			Chat chat = new Chat();
-			long chatID = newDoc.getLong("chatID");
-			int messageID = newDoc.getInteger("messageID");
-			chat.setId(chatID);
-			message.setForward_from_chat(chat);
-			message.setForward_from_message_id(messageID);
-			List<Document> visits = newDoc.get("visits", List.class);
-			Document orders = (Document) newDoc.get(
-					"orders", List.class).get(0);
-			int postReqID = orders.getInteger("postReqID");
-			boolean upsert = true;
-			if (visits != null)
-			{
-				for (Document i : visits)
-				{
-					if (i.getInteger("userID") == from.getId())
-					{
-						upsert = false;
-						break;
-					}
-				}
-			}
-			try
-			{
-				botInterface.forwardMessage(message);
-			}
-			catch (Result result)
-			{
-				if (result.getError_code() == 403)
-				{
-					Logger.ERROR(result);
-					Logger.DEBUG("Error forwarding post to user");
-					Logger.TRACE(from);
-					try
-					{
-						Logger.dumpAndSend(bot);
-					}
-					catch (IOException e)
-					{
-						e.printStackTrace();
-					}
-					return;
-				}
-				dbDriver.errorSendingPost(chatID, messageID);
-				goToNextPost(from, user);
-			}
-			Document updateDoc = new Document(new Document("temp", new Document("upsert", upsert)
-					.append("chatID", chatID).append("messageID", messageID).append("postReqID", postReqID)));
-			goToState(from, States.CONFIRM_VIEW_POST, updateDoc, null);
-		}
-		else
-		{
-			message.setText(Messages.POST_NO_POSTS);
-			botInterface.sendMessage(message);
-			dbDriver.closeCursor(from.getId());
-			sendStateMessage(States.MAIN_MENU, user, from);
-			goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
-		}
 	}
 	
 	protected void sendStateMessage (int state, Document doc, User from) throws SuspendExecution, Result

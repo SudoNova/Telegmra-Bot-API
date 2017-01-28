@@ -25,14 +25,16 @@ public class EventProcessor extends UserInterface
 	User botUser;
 	private MongoDBDriver dbDriver;
 	private ViewEntity viewEntity;
+	private MemberEntity memberEntity;
 	
 	public EventProcessor ()
 	{
 		dbDriver = new MongoDBDriver();
 		viewEntity = new ViewEntity(dbDriver);
+		memberEntity = new MemberEntity(dbDriver);
 	}
 	
-	public void onMessage (Message message) throws SuspendExecution
+	public Message onMessage (Message message) throws SuspendExecution
 	{
 		User from = message.getFrom();
 		try
@@ -50,10 +52,13 @@ public class EventProcessor extends UserInterface
 					processMainMenu(message, from, doc);
 					break;
 				case States.CONFIRM_VIEW_POST:
-					viewEntity.confirmViewPost(message, from, doc, this);
+					viewEntity.confirmViewPost(message, doc, this);
 					break;
-				case States.WAITING_FOR_POST:
+				case States.POST_ENTER:
 					viewEntity.getPost(message, from, doc, bot, this);
+					break;
+				case States.CHANNEL_ENTER:
+					memberEntity.enterChannel(message, this);
 					break;
 				case States.WAITING_FOR_AMOUNT:
 					getAmount(message, from, doc);
@@ -64,7 +69,7 @@ public class EventProcessor extends UserInterface
 				case States.TRACK_CHOOSE:
 					if (!message.hasText())
 					{
-						return;
+						return null;
 					}
 					String choice = message.getText();
 					if (choice.equals(Messages.TRACK_POST_REQUESTS))
@@ -77,9 +82,11 @@ public class EventProcessor extends UserInterface
 					}
 					else if (choice.equals(Messages.RETURN_TO_MAIN) || choice.startsWith("/start"))
 					{
-						sendStateMessage(States.MAIN_MENU, doc, from);
-						goToState(from, States.MAIN_MENU);
+						sendStateMessage(States.MAIN_MENU, doc, from.getId());
+						goToState(from.getId(), States.MAIN_MENU);
 					}
+					else
+						sendStateMessage(States.TRACK_CHOOSE, doc, from.getId());
 					break;
 				case States.TRACK_POSTS:
 					viewEntity.trackRequests(from, message, doc, botInterface, this, false);
@@ -110,6 +117,7 @@ public class EventProcessor extends UserInterface
 		{
 			throwable.printStackTrace();
 		}
+		return null;
 	}
 	
 	public Document getUser (Message message, User from) throws SuspendExecution, MongoException
@@ -148,8 +156,8 @@ public class EventProcessor extends UserInterface
 		}
 		if (message.getText().equals(Messages.RETURN_TO_MAIN) || message.getText().startsWith("/start"))
 		{
-			sendStateMessage(States.MAIN_MENU, doc, from);
-			goToState(from, States.MAIN_MENU, null, new Document("temp", "").append("previous_state", ""));
+			sendStateMessage(States.MAIN_MENU, doc, from.getId());
+			goToState(from.getId(), States.MAIN_MENU, null, new Document("temp", "").append("previous_state", ""));
 		}
 		ArrayList<Integer> list = new ArrayList<>();
 		Scanner scanner = new Scanner(message.getText());
@@ -161,12 +169,16 @@ public class EventProcessor extends UserInterface
 		{
 			int coins = doc.getInteger("coins");
 			int previousState = doc.getInteger("previous_state");
-			if (previousState == States.WAITING_FOR_POST)
+			if (previousState == States.POST_ENTER)
 			{
-				viewEntity.getAmount(message, from, list, coins, botInterface);
+				viewEntity.getAmount(from, list, coins, botInterface);
 			}
 //						else if (previousState == States.)
 			//TODO add channel
+		}
+		else
+		{
+			sendStateMessage(States.WAITING_FOR_AMOUNT, doc, from.getId());
 		}
 	}
 	
@@ -192,8 +204,7 @@ public class EventProcessor extends UserInterface
 		message.setText(welcome);
 		message.setReply_markup(Keyboards.GET_PHONE);
 		botInterface.sendMessage(message);
-		dbDriver.updateUser(from, new Document("$set", new Document("state", States
-				.WAITING_FOR_PHONE_NUMBER)));
+		goToState(from.getId(), States.WAITING_FOR_PHONE_NUMBER);
 	}
 	
 	public void confirmOrder (Message message, User from, Document doc) throws SuspendExecution, Result
@@ -204,19 +215,19 @@ public class EventProcessor extends UserInterface
 			if (text.equals(Messages.YES))
 			{
 				int previous_state = doc.getInteger("previous_state");
-				if (previous_state == States.WAITING_FOR_POST)
+				if (previous_state == States.POST_ENTER)
 				{
-					viewEntity.confirmOrder(message, from, doc, botInterface, this);
+					viewEntity.confirmOrder(from, doc, botInterface, this);
 				}
-				else if (previous_state == States.WAITING_FOR_CHANNEL)
+				else if (previous_state == States.CHANNEL_ENTER)
 				{
 					//TODO add channel
 				}
 			}
 			else if (text.equals((Messages.NO)) || text.startsWith("/start"))
 			{
-				sendStateMessage(States.MAIN_MENU, doc, from);
-				goToState(from, States.MAIN_MENU, null, new Document("order_amounts", "").append("temp", "")
+				sendStateMessage(States.MAIN_MENU, doc, from.getId());
+				goToState(from.getId(), States.MAIN_MENU, null, new Document("order_amounts", "").append("temp", "")
 						.append("previous_state", ""));
 				
 			}
@@ -238,30 +249,42 @@ public class EventProcessor extends UserInterface
 			{
 				message.setText(Messages.LOW_CREDITS);
 				botInterface.sendMessage(message);
-				sendStateMessage(States.MAIN_MENU, doc, from);
-				goToState(from, States.MAIN_MENU);
+				sendStateMessage(States.MAIN_MENU, doc, from.getId());
+				goToState(from.getId(), States.MAIN_MENU);
 			}
 			else
 			{
-				sendStateMessage(States.WAITING_FOR_POST, doc, from);
-				dbDriver.updateUser(from, new Document("$set",
-				                                       new Document("state", States.WAITING_FOR_POST)
-				                    )
-				                   );
+				sendStateMessage(States.POST_ENTER, doc, from.getId());
+				goToState(from.getId(), States.POST_ENTER);
 			}
+		}
+		else if (choice.equals(Messages.CHANNEL_ORDER))
+		{
+			message.setText("در حال آماده سازی. لطفا چند روز دیگر صبر کنید");
+			botInterface.sendMessage(message);
+//			int coins = doc.getInteger("coins");
+//			if (coins < 2)
+//			{
+//				message.setText(Messages.LOW_CREDITS);
+//				botInterface.sendMessage(message);
+//				sendStateMessage(States.MAIN_MENU, doc, from.getId());
+//				goToState(from.getId(), States.MAIN_MENU);
+//			}
+//			sendStateMessage(States.CHANNEL_ENTER, doc, from.getId());
+//			goToState(from.getId(), States.CHANNEL_ENTER);
 		}
 		else if (choice.equals(Messages.POST_VIEW))
 		{
-			viewEntity.goToNextPost(from, doc, botInterface, bot, this);
+			viewEntity.goToNextPost(doc, this);
 		}
 		else if (choice.equals(Messages.TRACK))
 		{
-			sendStateMessage(States.TRACK_CHOOSE, doc, from);
-			goToState(from, States.TRACK_CHOOSE);
+			sendStateMessage(States.TRACK_CHOOSE, doc, from.getId());
+			goToState(from.getId(), States.TRACK_CHOOSE);
 		}
 		else if (choice.startsWith("/start"))
 		{
-			sendStateMessage(States.MAIN_MENU, doc, from);
+			sendStateMessage(States.MAIN_MENU, doc, from.getId());
 //			goToState(from, States.MAIN_MENU);
 		}
 		else if (choice.equals(Messages.REFERRAL_LINK))
@@ -273,19 +296,23 @@ public class EventProcessor extends UserInterface
 			String text = Messages.REFERRAL_NOTE.replace("{coins}", referralReward + "")
 					+ "https://telegram.me/" + botUser.getUsername() + "?start=" + doc.getInteger("userID");
 			message.setText(text);
-			botInterface.sendMessage(message);
+			botInterface.sendMessage(message, false, true);
 		}
 		else if (choice.equals(Messages.CONTACT_US))
 		{
-			message.setText("برای ارتباط با مدیر روبات به @SuNova پیام دهید.");
+			message.setText("برای ارتباط با مدیر روبات به @ViewMemberSupport پیام دهید.");
 			botInterface.sendMessage(message);
+		}
+		else
+		{
+			sendStateMessage(States.MAIN_MENU, doc, from.getId());
 		}
 		//TODO other choices
 	}
 	
-	protected void sendStateMessage (int state, Document doc, User from) throws SuspendExecution, Result
+	protected void sendStateMessage (int state, Document doc, int userID) throws SuspendExecution, Result
 	{
-		Message message = new Message().setChat(new Chat().setId(from.getId()));
+		Message message = new Message().setChat(new Chat().setId(userID));
 		switch (state)
 		{
 			case States.MAIN_MENU:
@@ -293,9 +320,9 @@ public class EventProcessor extends UserInterface
 				message.setReply_markup(Keyboards.MAIN_MENU);
 				botInterface.sendMessage(message);
 				break;
-			case States.WAITING_FOR_POST:
+			case States.POST_ENTER:
 				message.setText(Messages.POST_SEND);
-				message.setReply_markup(Keyboards.POST_SEND_ORDER);
+				message.setReply_markup(Keyboards.ENTER_ORDER);
 				botInterface.sendMessage(message);
 				break;
 			case States.TRACK_CHOOSE:
@@ -303,15 +330,26 @@ public class EventProcessor extends UserInterface
 				message.setReply_markup(Keyboards.TRACK_CHOOSE);
 				botInterface.sendMessage(message);
 				break;
+			case States.CHANNEL_ENTER:
+				message.setText(Messages.CHANNEL_ENTER);
+				message.setReply_markup(Keyboards.ENTER_ORDER);
+				botInterface.sendMessage(message);
+				break;
+			case States.WAITING_FOR_AMOUNT:
+				message.setText(
+						Messages.POST_ENTER_AMOUNT.replace("{coins}", doc.getInteger("coins") + ""));
+				message.setReply_markup(Keyboards.ENTER_INPUT);
+				botInterface.sendMessage(message);
+				break;
 		}
 	}
 	
-	void goToState (User from, int state) throws SuspendExecution, MongoException
+	void goToState (int userID, int state) throws SuspendExecution, MongoException
 	{
-		goToState(from, state, null, null);
+		goToState(userID, state, null, null);
 	}
 	
-	void goToState (User from, int state, Document set, Document unset) throws SuspendExecution, MongoException
+	void goToState (int userID, int state, Document set, Document unset) throws SuspendExecution, MongoException
 	{
 		if (set == null)
 		{
@@ -327,7 +365,7 @@ public class EventProcessor extends UserInterface
 			newDoc.append("$unset", unset);
 		}
 		
-		dbDriver.updateUser(from, newDoc);
+		dbDriver.updateUser(userID, newDoc);
 	}
 	
 	private void getPhoneNumber (Message message, User from, Document doc)
@@ -349,7 +387,7 @@ public class EventProcessor extends UserInterface
 			if (referrerID != null)
 			{
 				Message newMessage = new Message().setChat(new Chat().setId(referrerID))
-						.setText(Messages.NEW_REFERRED_USER.replace("{coins}", referralReward + ""));
+						.setText(Messages.REFERRAL_NEW.replace("{coins}", referralReward + ""));
 				try
 				{
 					botInterface.sendMessage(newMessage);
@@ -360,7 +398,7 @@ public class EventProcessor extends UserInterface
 				}
 			}
 			botInterface.sendMessage(message);
-			sendStateMessage(States.MAIN_MENU, doc, from);
+			sendStateMessage(States.MAIN_MENU, doc, from.getId());
 		}
 		else
 		{

@@ -36,6 +36,7 @@ public class BotInterface
 	private static ArrayList<BotInterface> repos;
 	private boolean shutDown;
 	private UserInterface processor;
+	private ArrayList<EventHandler> handlers;
 	
 	static
 	{
@@ -48,6 +49,8 @@ public class BotInterface
 	{
 		transceiver = Transceiver.getInstance(bot);
 		processor = bot.userInterface;
+		handlers = new ArrayList<>();
+		handlers.add(processor);
 	}
 	
 	static BotInterface getInstance (Bot bot)
@@ -95,10 +98,10 @@ public class BotInterface
 	public Message sendMessage (Message message) throws SuspendExecution, Result
 	{
 		
-		return sendMessage(message, false);
+		return sendMessage(message, false, false);
 	}
 	
-	public Message sendMessage (Message message, boolean disableNotification) throws
+	public Message sendMessage (Message message, boolean disableNotification, boolean disablePreview) throws
 			SuspendExecution, Result
 	{
 		try
@@ -121,6 +124,10 @@ public class BotInterface
 			if (disableNotification)
 			{
 				list.add(new AbstractMap.SimpleEntry<>("disable_notification", "true"));
+			}
+			if (disablePreview)
+			{
+				list.add(new AbstractMap.SimpleEntry<>("disable_web_page_preview", "true"));
 			}
 			Message replyTo = message.getReply_to_message();
 			if (replyTo != null)
@@ -263,12 +270,30 @@ public class BotInterface
 				transceiver.updateIndex.compareAndSet(index, currentIndex);
 				if (update.containsMessage())
 				{
-					processor.onMessage(update.getMessage());
+					Message message = update.getMessage();
+					for (EventHandler i : handlers)
+					{
+						message = i.onMessage(message);
+						if (message == null)
+						{
+							break;
+						}
+					}
 				}
 				return null;
 			}
 		}.start();
 		
+	}
+	
+	public void registerHandler (EventHandler handler)
+	{
+		handlers.add(0, handler);
+	}
+	
+	public void removeHandler (EventHandler handler)
+	{
+		handlers.remove(handler);
 	}
 	
 	protected void processUpdates (Result result)

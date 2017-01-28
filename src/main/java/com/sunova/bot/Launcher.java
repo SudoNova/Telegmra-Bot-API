@@ -2,6 +2,7 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.SuspendExecution;
 import com.sunova.botframework.Bot;
+import com.sunova.modules.FlowController;
 
 import java.io.IOException;
 
@@ -19,7 +20,7 @@ public class Launcher
 		String domainAddress = "sunova.dynu.com";
 		EventProcessor processor = new EventProcessor();
 		instance.setBotToken(token).setDomainAddress(domainAddress)
-				.setUserInterface(processor).build();
+				.setUserInterface(processor).build().getInterface().registerHandler(new FlowController());
 		
 	}
 }

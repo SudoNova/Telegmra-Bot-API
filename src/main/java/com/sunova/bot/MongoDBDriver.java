@@ -5,6 +5,7 @@ import co.paralleluniverse.fibers.FiberAsync;
 import co.paralleluniverse.fibers.SuspendExecution;
 import co.paralleluniverse.strands.Strand;
 import co.paralleluniverse.strands.concurrent.ReentrantReadWriteLock;
+import com.mongodb.MongoCursorNotFoundException;
 import com.mongodb.MongoException;
 import com.mongodb.async.AsyncBatchCursor;
 import com.mongodb.async.client.MongoClient;
@@ -72,7 +73,7 @@ public class MongoDBDriver
 						{
 							users.createIndex(
 									new Document("phoneNumber", 1).append("userID", 1),
-									new IndexOptions().background(true).unique(true),
+									new IndexOptions().unique(true),
 									(r1, t1) ->
 									{
 										if (t1 != null)
@@ -83,7 +84,7 @@ public class MongoDBDriver
 							                 );
 							posts.createIndex(
 									new Document("chatID", 1).append("messageID", 1),
-									new IndexOptions().background(true).unique(true),
+									new IndexOptions().unique(true),
 									(r2, t2) ->
 									{
 										if (t2 != null)
@@ -94,8 +95,7 @@ public class MongoDBDriver
 							                 );
 							channels.createIndex(
 									new Document("chatID", 1),
-									new IndexOptions().background(true)
-											.unique(true),
+									new IndexOptions().unique(true),
 									(r3, t3) ->
 									{
 										if (t3 != null)
@@ -106,7 +106,7 @@ public class MongoDBDriver
 							                    );
 							posts.createIndex(
 									new Document("orders.postReqID", 1),
-									new IndexOptions().background(true).unique(true),
+									new IndexOptions().unique(true),
 									(r4, t4) ->
 									{
 										if (t4 != null)
@@ -117,7 +117,7 @@ public class MongoDBDriver
 							                 );
 							channels.createIndex(
 									new Document("orders.channelReqID", 1),
-									new IndexOptions().background(true).unique(true),
+									new IndexOptions().unique(true),
 									(r5, t5) ->
 									{
 										if (t5 != null)
@@ -151,7 +151,9 @@ public class MongoDBDriver
 									}
 							                 );
 						}
-					}.run();
+					}.
+							
+							run();
 				}
 				catch (Throwable throwable)
 				{
@@ -159,7 +161,9 @@ public class MongoDBDriver
 				}
 				return null;
 			}
-		}.start();
+		}.
+				
+				start();
 	}
 	
 	public Document getUser (int userID) throws SuspendExecution, MongoException
@@ -311,7 +315,7 @@ public class MongoDBDriver
 					throw new MongoException("Unable to update previous ID");
 				}
 			}
-			updateUser(from, new Document("$set", new Document("phoneNumber", phoneNumber)
+			updateUser(from.getId(), new Document("$set", new Document("phoneNumber", phoneNumber)
 					.append("state", States.MAIN_MENU)).append("$unset", new Document("previous_state", "")));
 		}
 		catch (InterruptedException e)
@@ -355,7 +359,8 @@ public class MongoDBDriver
 												eq("userID", referrerID),
 												new Document("$inc",
 												             new Document("coins", referralReward)
-												),
+												)
+														.append("$addToSet", new Document("referrals", from.getId())),
 												(r1, t1) ->
 												{
 													if (t1 != null)
@@ -394,7 +399,7 @@ public class MongoDBDriver
 		}
 	}
 	
-	public Document updateUser (User user, Document doc) throws SuspendExecution, MongoException
+	public Document updateUser (int userID, Document doc) throws SuspendExecution, MongoException
 	{
 		try
 		{
@@ -404,7 +409,7 @@ public class MongoDBDriver
 				protected void requestAsync ()
 				{
 					users.findOneAndUpdate(
-							eq("userID", user.getId()), doc,
+							eq("userID", userID), doc,
 							new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER),
 							(result, t) ->
 							{
@@ -436,7 +441,7 @@ public class MongoDBDriver
 	public Document insertUser (User user, Integer referrerID) throws SuspendExecution, MongoException
 	{
 		Document doc = new Document();
-		doc.append("userID", user.getId()).append("type", User.FREE_USER).append("coins", 1000).append("state", 1);
+		doc.append("userID", user.getId()).append("type", User.FREE_USER).append("coins", 20).append("state", 1);
 		doc.append("previous_state", 1).append("registrationDate", System.currentTimeMillis());
 		if (referrerID != null)
 		{
@@ -519,7 +524,7 @@ public class MongoDBDriver
 		
 	}
 	
-	public Document insertNewPostViewOrder (User user, long chatID, int messageID, int amount)
+	public Document insertNewPostViewOrder (int userID, long chatID, int messageID, int amount)
 			throws SuspendExecution, MongoException
 	{
 		try
@@ -539,7 +544,7 @@ public class MongoDBDriver
 								int postReqId = result.getInteger("postReqID");
 								long time = System.currentTimeMillis();
 								Document newDoc = new Document("postReqID", postReqId)
-										.append("ownerID", user.getId()).append("startDate", time)
+										.append("ownerID", userID).append("startDate", time)
 										.append("amount", amount).append("remaining", amount)
 										.append("viewCount", 0).append("endDate", time);
 								posts.updateOne(
@@ -563,7 +568,7 @@ public class MongoDBDriver
 					                     );
 				}
 			}.run();
-			return updateUser(user, new Document("$inc", new Document("coins", -amount * ViewEntity.visitFactor)));
+			return updateUser(userID, new Document("$inc", new Document("coins", -amount * ViewEntity.visitFactor)));
 		}
 		catch (InterruptedException e)
 		{
@@ -601,6 +606,7 @@ public class MongoDBDriver
 					protected void requestAsync ()
 					{
 						posts.find(and(
+								lt("errorCount", 10),
 								elemMatch("orders", and(
 										gt("remaining", 0),
 										ne("ownerID", userID)
@@ -636,33 +642,43 @@ public class MongoDBDriver
 				batchMapLock.writeLock().unlock();
 			}
 			final AsyncBatchCursor<Document> temp = cursor;
-			Document result = new FiberAsync<Document, MongoException>()
+			try
 			{
-				@Override
-				protected void requestAsync ()
+				Document result = new FiberAsync<Document, MongoException>()
 				{
-					temp.next(
-							(r, t) ->
-							{
-								if (t != null)
+					@Override
+					protected void requestAsync ()
+					{
+						temp.next(
+								(r, t) ->
 								{
-									asyncFailed(t);
-								}
-								else
-								{
-									try
+									if (t != null)
 									{
-										asyncCompleted(r.get(0));
+										asyncFailed(t);
 									}
-									catch (NullPointerException e)
+									else
 									{
-										asyncCompleted(null);
+										try
+										{
+											asyncCompleted(r.get(0));
+										}
+										catch (NullPointerException e)
+										{
+											asyncCompleted(null);
+										}
 									}
-								}
-							});
-				}
-			}.run();
-			return result;
+								});
+					}
+				}.run();
+				return result;
+			}
+			catch (MongoCursorNotFoundException e)
+			{
+				batchMapLock.writeLock().lock();
+				batchMap.remove(userID);
+				batchMapLock.writeLock().unlock();
+				return nextPost(userID);
+			}
 		}
 		catch (InterruptedException e)
 		{
@@ -726,68 +742,91 @@ public class MongoDBDriver
 		}
 	}
 	
-	public Document confirmVisit (User from, long chatID, int messageID, int postReqID, boolean upsert)
+	public Document confirmVisit (int userID, int postReqID)
 			throws SuspendExecution, MongoException
 	{
 		try
 		{
 			return new FiberAsync<Document, MongoException>()
 			{
-				
 				@Override
 				protected void requestAsync ()
 				{
-					Long currentTime = System.currentTimeMillis();
-					Document inc = new Document("orders.$.viewCount", 1).append("orders.$.remaining", -1);
-					Document set = new Document("orders.$.endDate", currentTime);
-					Document doc = new Document("$inc", inc);
-					if (upsert)
-					{
-						Document push = new Document("visits", new Document("userID", from.getId())
-								.append("date", System.currentTimeMillis()));
-						doc.append("$push", push);
-					}
-					else
-					{
-						set.append("visits.$.date", currentTime);
-					}
-					doc.append("$set", set);
-					Document filter = new Document("chatID", chatID)
-							.append("messageID", messageID).append("orders.postReqID", postReqID);
-					if (!upsert)
-					{
-						filter.append("visits.userID", from.getId());
-					}
-					posts.updateOne(
-							filter, doc, (r, t) ->
+					long currentTime = System.currentTimeMillis();
+					posts.findOneAndUpdate(
+							new Document("orders.postReqID", postReqID),
+							new Document("$inc", new Document("orders.$.viewCount", 1).append("orders.$.remaining", -1)
+							).append("$set", new Document("orders.$.endDate", currentTime)),
+							(r, t) ->
 							{
 								if (t != null)
 								{
-									asyncFailed(t);
+									t.fillInStackTrace();
+									t.printStackTrace();
+									System.err.println(new Date(currentTime) + ": " + userID + " " + postReqID);
+								}
+								else
+								{
+									ObjectId id = r.getObjectId("_id");
+									posts.findOneAndUpdate(
+											new Document("_id", id).append("visits.userID", userID),
+											new Document("$set", new Document("visits.$.date", currentTime)),
+											(r2, t2) ->
+											{
+												if (t2 != null)
+												{
+													t2.fillInStackTrace();
+													t2.printStackTrace();
+													System.err.println(
+															new Date(currentTime) + ": " + userID + " " + postReqID);
+												}
+												else if (r2 == null)
+												{
+													posts.findOneAndUpdate(
+															new Document("_id", id),
+															new Document(
+																	"$push", new Document(
+																	"visits", new Document("userID", userID)
+																	.append("date", currentTime)
+															)),
+															(r3, t3) ->
+															{
+																if (t3 != null)
+																{
+																	t3.fillInStackTrace();
+																	t3.printStackTrace();
+																	System.err.println(
+																			new Date(currentTime) + ": " +
+																					userID + " " + postReqID);
+																}
+															}
+													                      );
+												}
+											}
+									                      );
 								}
 								users.findOneAndUpdate(
-										eq("userID", from.getId()),
+										eq("userID", userID),
 										new Document("$inc", new Document("coins", 1)),
-										new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER),
-										(r2, t2) ->
+										new FindOneAndUpdateOptions()
+												.returnDocument(ReturnDocument.AFTER),
+										(r4, t4) ->
 										{
 											
-											if (t2 != null)
+											if (t4 != null)
 											{
-												asyncFailed(t2);
+												asyncFailed(t4);
 											}
 											else
 											{
-												asyncCompleted(r2);
+												asyncCompleted(r4);
 											}
 										}
 								                      );
 							}
-					               );
+					                      );
 				}
-			}.
-					
-					run();
+			}.run();
 		}
 		catch (InterruptedException e)
 		{

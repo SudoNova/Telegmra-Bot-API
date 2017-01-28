@@ -35,43 +35,43 @@ public class ViewEntity
 	}
 	
 	
-	public void confirmViewPost (Message message, User from, Document doc, EventProcessor processor)
+	public void confirmViewPost (Message message, Document user, EventProcessor processor)
 			throws SuspendExecution, MongoException, Result
 	{
+		int userID = user.getInteger("userID");
 		String choice = message.getText();
 		if (choice != null)
 		{
-			Document temp = doc.get("temp", Document.class);
-			boolean upsert = temp.getBoolean("upsert");
-			long chatID = temp.getLong("chatID");
-			int messageID = temp.getInteger("messageID");
+			Document temp = user.get("temp", Document.class);
 			int postReqID = temp.getInteger("postReqID");
-			doc = dbDriver.confirmVisit(from, chatID, messageID, postReqID, upsert);
-			if (choice.contains(Messages.VIEW_AGAIN.substring(0, 14)))
+			user = dbDriver.confirmVisit(userID, postReqID);
+			if (choice.contains(Messages.POST_VIEW_AGAIN.substring(0, 14)))
 			{
-				goToNextPost(from, doc, processor.getBotInterface(), processor.getBot(), processor);
+				goToNextPost(user, processor);
 			}
-			else if (choice.equals(Messages.VIEW_CONFIRMED) || choice.startsWith("/start"))
+			else if (choice.equals(Messages.POST_VIEW_CONFIRMED) || choice.startsWith("/start"))
 			{
-				dbDriver.closeCursor(from.getId());
-				processor.sendStateMessage(States.MAIN_MENU, doc, from);
-				processor.goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
+				dbDriver.closeCursor(userID);
+				processor.sendStateMessage(States.MAIN_MENU, user, userID);
+				processor.goToState(userID, States.MAIN_MENU, null, new Document("temp", ""));
 			}
 		}
 	}
 	
-	void goToNextPost (User from, Document user, BotInterface botInterface, Bot bot, EventProcessor processor)
+	void goToNextPost (Document user, EventProcessor processor)
 			throws SuspendExecution, MongoException, Result
 	{
-		Message message = new Message().setChat(new Chat().setId(from.getId()));
-		Document newDoc = dbDriver.nextPost(from.getId());
+		int userID = user.getInteger("userID");
+		BotInterface botInterface = processor.getBotInterface();
+		Message message = new Message().setChat(new Chat().setId(userID));
+		Document newDoc = dbDriver.nextPost(userID);
 		if (newDoc != null)
 		{
 			ReplyKeyboardMarkup keyboard = Keyboards.POST_CONFIRM_ORDER;
 			int coins = user.getInteger("coins");
-			keyboard.getKeyboard()[0][0].setText(Messages.VIEW_AGAIN.replace
+			keyboard.getKeyboard()[0][0].setText(Messages.POST_VIEW_AGAIN.replace
 					("{coins}", coins + ""));
-			message.setText(Messages.VIEW_NOTE);
+			message.setText(Messages.POST_VIEW_NOTE);
 			message.setReply_markup(keyboard);
 			botInterface.sendMessage(message);
 			Chat chat = new Chat();
@@ -80,57 +80,32 @@ public class ViewEntity
 			chat.setId(chatID);
 			message.setForward_from_chat(chat);
 			message.setForward_from_message_id(messageID);
-			List<Document> visits = newDoc.get("visits", List.class);
 			Document orders = (Document) newDoc.get(
 					"orders", List.class).get(0);
 			int postReqID = orders.getInteger("postReqID");
-			boolean upsert = true;
-			if (visits != null)
-			{
-				for (Document i : visits)
-				{
-					if (i.getInteger("userID") == from.getId())
-					{
-						upsert = false;
-						break;
-					}
-				}
-			}
 			try
 			{
 				botInterface.forwardMessage(message);
 			}
 			catch (Result result)
 			{
-				if (result.getError_code() == 403)
-				{
-					Logger.ERROR(result);
-					Logger.DEBUG("Error forwarding post to user");
-					Logger.TRACE(from);
-					try
-					{
-						Logger.dumpAndSend(bot);
-					}
-					catch (IOException e)
-					{
-						e.printStackTrace();
-					}
-					return;
-				}
+				result.fillInStackTrace();
+				result.printStackTrace();
 				dbDriver.errorSendingPost(chatID, messageID);
-				goToNextPost(from, user, botInterface, bot, processor);
+				goToNextPost(user, processor);
+				return;
 			}
-			Document updateDoc = new Document(new Document("temp", new Document("upsert", upsert)
-					.append("chatID", chatID).append("messageID", messageID).append("postReqID", postReqID)));
-			processor.goToState(from, States.CONFIRM_VIEW_POST, updateDoc, null);
+			Document updateDoc = new Document(new Document("temp", new Document("postReqID", postReqID)
+			));
+			processor.goToState(userID, States.CONFIRM_VIEW_POST, updateDoc, null);
 		}
 		else
 		{
 			message.setText(Messages.POST_NO_POSTS);
 			botInterface.sendMessage(message);
-			dbDriver.closeCursor(from.getId());
-			processor.sendStateMessage(States.MAIN_MENU, user, from);
-			processor.goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
+			dbDriver.closeCursor(userID);
+			processor.sendStateMessage(States.MAIN_MENU, user, userID);
+			processor.goToState(userID, States.MAIN_MENU, null, new Document("temp", ""));
 		}
 	}
 	
@@ -157,7 +132,7 @@ public class ViewEntity
 			String newText = getTrackString(list);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
-			processor.goToState(from, States.TRACK_POSTS, new Document("temp", 0), null);
+			processor.goToState(from.getId(), States.TRACK_POSTS, new Document("temp", 0), null);
 		}
 		else if (text.equals(Messages.NEXT))
 		{
@@ -173,7 +148,7 @@ public class ViewEntity
 			String newText = getTrackString(list);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
-			dbDriver.updateUser(from, new Document("$set", new Document("temp", skip)));
+			dbDriver.updateUser(from.getId(), new Document("$set", new Document("temp", skip)));
 		}
 		else if (text.equals(Messages.PREVIOUS))
 		{
@@ -189,12 +164,12 @@ public class ViewEntity
 			String newText = getTrackString(list);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
-			dbDriver.updateUser(from, new Document("$set", new Document("temp", skip)));
+			dbDriver.updateUser(from.getId(), new Document("$set", new Document("temp", skip)));
 		}
 		else if (text.equals(Messages.RETURN_TO_MAIN) || text.startsWith("/start"))
 		{
-			processor.sendStateMessage(States.MAIN_MENU, doc, from);
-			processor.goToState(from, States.MAIN_MENU, null, new Document("temp", ""));
+			processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
+			processor.goToState(from.getId(), States.MAIN_MENU, null, new Document("temp", ""));
 		}
 		else
 		{
@@ -278,8 +253,8 @@ public class ViewEntity
 			{
 				Logger.ERROR(result);
 			}
-			processor.sendStateMessage(States.MAIN_MENU, doc, from);
-			processor.goToState(from, States.MAIN_MENU);
+			processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
+			processor.goToState(from.getId(), States.MAIN_MENU);
 			return true;
 		}
 		return false;
@@ -338,8 +313,16 @@ public class ViewEntity
 		Integer messageID = null;
 		if (message.isForwardedFromChannel())
 		{
-			chatID = message.getForward_from_chat().getId();
-			messageID = message.getForward_from_message_id();
+			if (message.getForward_from_chat().hasUserName())
+			{
+				chatID = message.getForward_from_chat().getId();
+				messageID = message.getForward_from_message_id();
+			}
+			else
+			{
+				chatID = message.getChat().getId();
+				messageID = message.getMessage_id();
+			}
 		}
 		else if (message.isForwardedFromUser())
 		{
@@ -378,8 +361,8 @@ public class ViewEntity
 		}
 		else if (message.getText().equals(Messages.RETURN_TO_MAIN) || message.getText().startsWith("/start"))
 		{
-			processor.sendStateMessage(States.MAIN_MENU, doc, from);
-			processor.goToState(from, States.MAIN_MENU);
+			processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
+			processor.goToState(from.getId(), States.MAIN_MENU);
 			return;
 		}
 		else
@@ -403,8 +386,6 @@ public class ViewEntity
 		}
 		if (!(chatID == null || messageID == null))
 		{
-//			if (!message.isForwarded())
-//			{
 			Chat forwardChat = new Chat().setId(chatID);
 			Message newMessage = new Message().setForward_from_chat(forwardChat);
 			newMessage.setForward_from_message_id(messageID).setChat(message.getChat());
@@ -414,21 +395,12 @@ public class ViewEntity
 			}
 			catch (Result result)
 			{
-				if (result.getError_code() == 403)
-				{
-					Logger.ERROR(result);
-					Logger.DEBUG("Error returning post to user");
-					Logger.TRACE(from);
-					try
-					{
-						Logger.dumpAndSend(bot);
-					}
-					catch (IOException e)
-					{
-						e.printStackTrace();
-					}
-					return;
-				}
+//				if (result.getError_code() == 403)
+//				{
+//					message.setText("متاسفانه کانال‌های پرایویت پشتیبانی نمی‌شوند.");
+//					botInterface.sendMessage(message);
+//					return;
+//				}
 				message.setText(Messages.POST_INVALID_POST);
 				botInterface.sendMessage(message);
 				return;
@@ -440,10 +412,10 @@ public class ViewEntity
 			botInterface.sendMessage(message);
 			Document newDoc = new Document(
 					"$set", new Document("state", States.WAITING_FOR_AMOUNT)
-					.append("previous_state", States.WAITING_FOR_POST)
+					.append("previous_state", States.POST_ENTER)
 					.append("temp", Arrays.asList(chatID, messageID))
 			);
-			dbDriver.updateUser(from, newDoc);
+			dbDriver.updateUser(from.getId(), newDoc);
 		}
 		else
 		{
@@ -451,12 +423,18 @@ public class ViewEntity
 		}
 	}
 	
-	public void getAmount (Message message, User from, ArrayList<Integer> list, int coins, BotInterface botInterface)
+	public void getAmount (User from, ArrayList<Integer> list, int coins, BotInterface botInterface)
 			throws MongoException, Result, SuspendExecution
 	{
+		Message message = new Message().setChat(new Chat().setId(from.getId()));
 		if (list.get(0) * visitFactor > coins)
 		{
 			message.setText(Messages.AMOUNT_EXCEEDS);
+			botInterface.sendMessage(message);
+		}
+		else if (list.get(0) < 1)
+		{
+			message.setText(Messages.AMOUNT_ZERO);
 			botInterface.sendMessage(message);
 		}
 		else
@@ -468,21 +446,23 @@ public class ViewEntity
 							("{value}", list.get(0) * visitFactor + ""));
 			message.setReply_markup(Keyboards.CONFIRM);
 			botInterface.sendMessage(message);
-			dbDriver.updateUser(from, newDoc);
+			dbDriver.updateUser(from.getId(), newDoc);
 		}
 	}
 	
-	public void confirmOrder (Message message, User from, Document doc, BotInterface botInterface,
+	public void confirmOrder (User from, Document doc, BotInterface botInterface,
 	                          EventProcessor processor) throws SuspendExecution, Result
 	{
+		int userID = from.getId();
+		Message message = new Message().setChat(new Chat().setId(doc.getInteger("userID")));
 		ArrayList temp = (ArrayList) (doc.get("temp"));
 		ArrayList order_amounts = (ArrayList) (doc.get("order_amounts"));
-		doc = dbDriver.insertNewPostViewOrder(from, (long) temp.get(0), (int) temp.get(1), (int)
+		doc = dbDriver.insertNewPostViewOrder(userID, (long) temp.get(0), (int) temp.get(1), (int)
 				order_amounts.get(0));
 		message.setText(Messages.REQUEST_DONE);
 		botInterface.sendMessage(message);
-		processor.sendStateMessage(States.MAIN_MENU, doc, from);
-		processor.goToState(from, States.MAIN_MENU, null, new Document("temp", "").append
+		processor.sendStateMessage(States.MAIN_MENU, doc, userID);
+		processor.goToState(userID, States.MAIN_MENU, null, new Document("temp", "").append
 				("order_amounts", "").append("previous_state", ""));
 	}
 }

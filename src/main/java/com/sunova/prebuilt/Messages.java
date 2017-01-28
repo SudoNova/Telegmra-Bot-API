@@ -9,15 +9,10 @@ public final class Messages
 	public static final String WELCOME;
 	public static final String RESEND_PHONE_NUMBER;
 	public static final String PHONE_NUMBER_CONFIRMED;
-	public static final String POST_VIEW;
-	public static final String POST_ORDER;
-	public static final String MEMBER_ORDER;
+	public static final String CHANNEL_ORDER;
 	public static final String CONTACT_US;
 	public static final String MAIN_MENU;
-	public static final String POST_SEND;
 	public static final String RETURN_TO_MAIN;
-	public static final String POST_ENTER_AMOUNT;
-	public static final String POST_CONFIRM_ORDER;
 	public static final String AMOUNT_EXCEEDS;
 	public static final String WELCOME_BACK;
 	public static final String YES;
@@ -26,55 +21,63 @@ public final class Messages
 	public static final String PREVIOUS;
 	public static final String REQUEST_DONE;
 	public static final String LOW_CREDITS;
+	
+	public static final String POST_VIEW;
+	public static final String POST_ORDER;
+	public static final String POST_SEND;
+	public static final String POST_ENTER_AMOUNT;
+	public static final String POST_CONFIRM_ORDER;
 	public static final String POST_NO_POSTS;
-	public static final String VIEW_AGAIN;
-	public static final String VIEW_NOTE;
-	public static final String VIEW_CONFIRMED;
+	public static final String POST_VIEW_AGAIN;
+	public static final String POST_VIEW_NOTE;
+	public static final String POST_VIEW_CONFIRMED;
 	public static final String POST_INVALID_POST;
-	public static final String NEW_REFERRED_USER;
+	public static final String POST_EXISTS_NO_MORE;
+	
 	public static final String TRACK;
-	public final static String REFERRAL_LINK;
 	public static final String TRACK_CHOOSE;
 	public static final String TRACK_MEMBER_REQUESTS;
 	public static final String TRACK_POST_REQUESTS;
 	public static final String TRACK_NO_MORE;
 	public static final String TRACK_NO_ORDERS;
 	public static final String TRACK_POST_TEMPLATE;
-	public static final String POST_EXISTS_NO_MORE;
+	
+	public static final String REFERRAL_LINK;
 	public static final String REFERRAL_NOTE;
+	public static final String REFERRAL_NEW;
+	
+	public static final String CHANNEL_PRIVATE;
+	public static final String CHANNEL_ENTER;
+	public static final String AMOUNT_ZERO;
 	
 	static
 	{
 //		String temp = "";
 //		try
 //		{
-		WELCOME = " خوش اومدی {first} {last}\n لطفا شماره تلفنت رو بده!";
+		WELCOME = " خوش اومدی {first} {last}\n لطفا شماره تلفنت رو بده!\nبرای ارسال شماره تلفن" +
+				" نیازی نیست آن را وارد کنی. تنها بر روی دکمه زیر کلیک کن و پیغام را تایید کن" +
+				" تا شماره‌ات ارسال شود.";
 		RESEND_PHONE_NUMBER = "بدون شماره تلفنت نمی‌تونم ادامه بدم.\n لطف کن شماره تلفنت رو بفرست.";
 		PHONE_NUMBER_CONFIRMED =
 				"تایید شد. حالا می‌تونی از امکانات روبات استفاده کنی";
-		MAIN_MENU = "منوی اصلی\n" +
-				"لطفا توجه داشته باشید که ربات در حالت تست (آلفا) است." +
-				" بنابراین امکان خاموشی آن همواره وجود دارد.\n" +
-				"پس از پایان دوره‌ی تست، به هزار کاربر اول ربات سکه به عنوان هدیه تقدیم خواهد شد.\n" +
-				"لطفا در صورت مشاهده هرگونه مشکل مورد را به پشتیبانی ربات اطلاع داده و سکه هدیه بگیرید.\n" +
-				"شما هم اکنون {coins} سکه دارید.\nیکی از گزینه‌های زیر رو انتخاب کن:";
+		MAIN_MENU = "◀️ منوی اصلی ربات\n" +
+				"لطفا توجه " +
+				"داشته باشید که ربات در حالت آزمایشی فعال است، بنابراین ممکن است هر لحظه خاموش شود یا به مشکل بخورد.\n" +
+				"در صورت بروز مشکل با پشتیبانی برنامه @ViewMemberSupport تماس گرفته گزارش دهید تا سکه جایزه بگیرید.\n" +
+				"در هر مرحله با زدن روی عبارت /start به منوی اصلی باز می\u200Cگردید.\n" +
+				"کانال رسمی ربات \uD83D\uDC48 @ViewMemberChannel\n" +
+				"لطفا یکی از گزینه\u200Cهای زیر را انتخاب کنید (موجودی شما هم اکنون {coins} سکه است)";
 		POST_VIEW = "بازدید از پست‌ها";
 		POST_ORDER = "سفارش بازدید";
 		CONTACT_US = "تماس با ما (پشتیبانی)";
-		POST_SEND = "\uD83D\uDC48 لطفا لینک پستی که قصد افزایش بازدید آن را دارید ارسال کنید، یا آن پست را فوروارد نمایید. محدودیت\u200Cهایی در ارسال پست وجود دارد که برای شناخت آن\u200Cها پیشنهاد می\u200Cشود این راهنما را به صورت کامل بخوانید:\n" +
+		POST_SEND = "\uD83D\uDC48 پیش از ارسال لطفا دقت کنید. دو راه برای ارسال پست وجود دارد. نخست این که لینک پست را بفرستید (از کانال\u200Cهای عمومی) دوم این که آن را فوروارد کنید (از کانال\u200Cهای عمومی و خصوصی، کاربران و ربات\u200Cها)\n" +
 				"\n" +
-				"❗️ به خاطر داشته باشید که لینک پست را \"نباید\" فوروارد کنید زیرا در این صورت خود لینک به عنوان پست در نظر گرفته خواهد شد.\n" +
+				"\uD83D\uDC48 اگر لینک را فوروارد کنید به عنوان پست تلقی خواهد شد. همچنین پست\u200Cها را نباید مستقیم ارسال کنید، بلکه باید آن\u200Cها را فوروارد نمایید.\n" +
 				"\n" +
-				"❗️ همچنین دقت فرمایید که اگر قصد ارسال پست را دارید (و می\u200Cخواهید ربات آن را به صورت لینک شناسایی نکند) حتما باید آن را \"فوروارد نمایید\". پست\u200Cهایی که فورواردی نباشند (کپی پیست شوند) در حال حاضر پشتیبانی نمی\u200Cشوند. \n" +
+				"\uD83D\uDC48 پستی که ارسال می\u200Cکنید تا ۲۴ ساعت به هر کاربر فقط ۱ بار نمایش داده خواهد شد (مگر این که چند بار آن را سفارش دهید) زیرا تلگرام هر ۲۴ ساعت علامت \uD83D\uDC41\u200D\uD83D\uDDE8 زیر پست را برای همان کاربر دوباره اضافه می\u200Cکند\n" +
 				"\n" +
-				"❗️ با توجه به نکته\u200Cی قبلی، اگر قصد دارید که پیام از جانب شما فوروارد  " +
-				"نشود، ابتدا آن را در یک کانال خصوصی یا ربات بینام ارسال کرده و سپس آن را به ربات ما فوروارد کنید.\n" +
-				"\n" +
-				"\uD83D\uDC48 اگر شما پیامی را از از یک شخص فوروارد نمایید (نه یک کانال) ربات پیام فوروارد شده\u200Cی شما را داخل یک کانال خصوصی فوروارد می\u200Cکند سپس آن را ثبت می\u200Cکند.\n" +
-				"\n" +
-				"✅ بنابراین این اطمینان حاصل خواهد شد که اگر شما پستی را فوروارد کنید (چه از یک کانال چه از یک کاربر) حتما علامت \uD83D\uDC41\u200D\uD83D\uDDE8 زیر آن پست وجود دارد. حال اگر پست شما از پیش دارای این علامت بوده مقدار بازدید همان مقدار قبلی خواهد بود، در غیر این صورت مقدار بازدید اولیه پست شما برابر با ۱ است. \n" +
-				"\n" +
-				"✅  در پایان ربات برای اطمینان، در صورتی که مشکلی در ارسال پست به ربات وجود نداشته باشد، آن را برای شما فوروارد می\u200Cکند تا آن را تایید کنید.";
+				"\uD83D\uDC48 در صورتی که پست از کانال عمومی ارسال شده باشد، حتی اگر آن را چند بار در روز سفارش دهید، قانون ۲۴ ساعت ۱ بازدید برای آن صادق است. بنابراین پیشنهاد می\u200Cکنیم پست\u200Cها را از کانال\u200Cهای عمومی فوروارد نمایید.";
 		RETURN_TO_MAIN = "انصراف و بازگشت به منوی اصلی";
 		POST_ENTER_AMOUNT = "لطفا تعداد بازدید " +
 				"مورد نظر را وارد کنید. هزینه هر بازدید دو سکه است.\n شما در حال حاضر {coins} سکه دارید.";
@@ -86,16 +89,16 @@ public final class Messages
 		LOW_CREDITS = "اعتبار شما برای سفارش کافی نیست. لطفا از " +
 				"طریق یکی از سه راه زیر اعتبار خود را افزایش دهید:\n۱- بازدید پست\n۲- عضویت در کانال\n۳- خرید سکه";
 		POST_NO_POSTS = "در حال حاضر پستی جهت نمایش موجود نیست :(\n لطفا بعدا دوباره امتحان کنید.";
-		VIEW_AGAIN = "تایید و ادامه (موجودی: {coins} سکه)";
-		VIEW_CONFIRMED = "تایید و بازگشت به منوی اصلی";
-		VIEW_NOTE = "لطفا توجه کنید تا زمانی که بازدید را تایید نکنید سکه به حسابتان واریز نخواهد شد";
+		POST_VIEW_AGAIN = "تایید و ادامه (موجودی: {coins} سکه)";
+		POST_VIEW_CONFIRMED = "تایید و بازگشت به منوی اصلی";
+		POST_VIEW_NOTE = "لطفا توجه کنید تا زمانی که بازدید را تایید نکنید سکه به حسابتان واریز نخواهد شد";
 		POST_INVALID_POST = "پست یا لینکی که ارسال نمودید معتبر نیست.";
 		WELCOME_BACK = "شما قبلا در ربات عضو بودید. خوش برگشتید";
-		NEW_REFERRED_USER = "کاربر جدیدی با لینک شما ثبت نام کرد. {coins} سکه به حساب شما واریز شد." +
+		REFERRAL_NEW = "کاربر جدیدی با لینک شما ثبت نام کرد. {coins} سکه به حساب شما واریز شد." +
 				"\nضمن این که هر میزان سکه که توسط این کاربر خریداری شود، ۵ درصد آن به عنوان اشانتیون " +
 				"به شما تقدیم خواهد شد.";
 		TRACK = "پیگیری وضعیت سفارشات";
-		MEMBER_ORDER = "سفارش عضو (به زودی)";
+		CHANNEL_ORDER = "سفارش عضو (به زودی)";
 		REFERRAL_LINK = "لینک معرفی شما";
 		TRACK_CHOOSE = "پیگیری وضعیت سفارشات. لطفا یکی از گزینه‌های زیر را انتخاب کنید:";
 		TRACK_MEMBER_REQUESTS = "سفارشات ممبر (به زودی)";
@@ -114,6 +117,9 @@ public final class Messages
 				"معرفی شما در ربات ثبت نام کند، {coins} سکه به شما تعلق خواهد گرفت." +
 				" ضمن این که ۵ درصد از میزان سکه خریداری شده توسط  " +
 				"وی در صورتی که از این بات خریدی انجام دهد به موجودی شما افزوده خواهد شد.\nلینک معرفی شما:\n";
+		CHANNEL_PRIVATE = "کانالی که سعی در ثبت آن دارید خصوصی است. کانال‌های خصوصی پشتیبانی نمی‌شوند";
+		CHANNEL_ENTER = "لطفا لینک کانال خود را ارسال کنید. کانال‌های خصوصی قابل پذیرش نیستند";
+		AMOUNT_ZERO = "لطفا یک مقدار مثبت وارد کنید";
 //		}
 
 //		catch (UnsupportedEncodingException e)

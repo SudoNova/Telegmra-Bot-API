@@ -78,32 +78,32 @@ public class Logger
 		mapLock.writeLock().unlock();
 	}
 	
-	public static void INFO (Object... args)
+	public static void INFO (Object... args) throws SuspendExecution
 	{
 		log(LEVEL.INFO, args);
 	}
 	
-	public static void WARNING (Object... args)
+	public static void WARNING (Object... args) throws SuspendExecution
 	{
 		log(LEVEL.WARNING, args);
 	}
 	
-	public static void ERROR (Object... args)
+	public static void ERROR (Object... args) throws SuspendExecution
 	{
 		log(LEVEL.ERROR, args);
 	}
 	
-	public static void TRACE (Object... args)
+	public static void TRACE (Object... args) throws SuspendExecution
 	{
 		log(LEVEL.TRACE, args);
 	}
 	
-	public static void DEBUG (Object... args)
+	public static void DEBUG (Object... args) throws SuspendExecution
 	{
 		log(LEVEL.DEBUG, args);
 	}
 	
-	private static void log (LEVEL level, Object... obj)
+	private static void log (LEVEL level, Object... obj) throws SuspendExecution
 	{
 		if (logID.get() == null)
 		{

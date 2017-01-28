@@ -24,7 +24,7 @@ import java.util.ArrayList;
  */
 class WebHook
 {
-	protected static final int serverPort = 443;
+	protected static final int serverPort = 88;
 	private static ArrayList<WebHook> repos;
 	
 	static

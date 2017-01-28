@@ -108,4 +108,8 @@ public class Chat implements TObject
 		return this;
 	}
 	
+	public boolean hasUserName ()
+	{
+		return !(username == null);
+	}
 }

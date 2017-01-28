@@ -8,8 +8,8 @@ public final class States
 	public static final int START = 1;
 	public static final int WAITING_FOR_PHONE_NUMBER = 2;
 	public static final int MAIN_MENU = 3;
-	public static final int WAITING_FOR_POST = 4;
-	public static final int WAITING_FOR_CHANNEL = 5;
+	public static final int POST_ENTER = 4;
+	public static final int CHANNEL_ENTER = 5;
 	public static final int WAITING_FOR_AMOUNT = 6;
 	public static final int CONFIRM_VIEW_ORDER = 7;
 	public static final int CONFIRM_VIEW_POST = 8;

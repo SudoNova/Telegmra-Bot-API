@@ -12,7 +12,6 @@ import org.bson.Document;
 import org.jetbrains.annotations.NotNull;
 import org.telegram.objects.*;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -26,7 +25,7 @@ import java.util.regex.Pattern;
 public class ViewEntity
 {
 	static final int visitFactor = 2;
-	private static final long botChannel = -1001066076268L;
+	private static final long botChannelID = -1001066076268L;
 	private MongoDBDriver dbDriver;
 	
 	public ViewEntity (MongoDBDriver dbDriver)
@@ -75,14 +74,12 @@ public class ViewEntity
 			message.setReply_markup(keyboard);
 			botInterface.sendMessage(message);
 			Chat chat = new Chat();
-			long chatID = newDoc.getLong("chatID");
 			int messageID = newDoc.getInteger("messageID");
-			chat.setId(chatID);
+			chat.setId(botChannelID);
 			message.setForward_from_chat(chat);
 			message.setForward_from_message_id(messageID);
-			Document orders = (Document) newDoc.get(
-					"orders", List.class).get(0);
-			int postReqID = orders.getInteger("postReqID");
+			Document order = (Document) newDoc.get("orders", List.class).get(0);
+			int postReqID = order.getInteger("postReqID");
 			try
 			{
 				botInterface.forwardMessage(message);
@@ -91,7 +88,7 @@ public class ViewEntity
 			{
 				result.fillInStackTrace();
 				result.printStackTrace();
-				dbDriver.errorSendingPost(chatID, messageID);
+				dbDriver.errorSendingPost(messageID);
 				goToNextPost(user, processor);
 				return;
 			}
@@ -109,16 +106,19 @@ public class ViewEntity
 		}
 	}
 	
-	void trackRequests (User from, Message message, Document doc, BotInterface botInterface, EventProcessor processor,
-	                    boolean init) throws SuspendExecution, MongoException, Result
+	void trackRequests (Message message, Document doc, EventProcessor processor)
+			throws SuspendExecution, MongoException, Result
 	{
+		User from = message.getFrom();
+		BotInterface botInterface = processor.getBotInterface();
 		if (!message.hasText())
 		{
 			return;
 		}
 		Message newMessage = new Message().setChat(new Chat().setId(from.getId()));
 		String text = message.getText();
-		init = init && (doc.get("temp") == null || doc.getInteger("temp") == 0);
+		boolean init = doc.get("temp") == null ||
+				(doc.getInteger("temp") == 0 && doc.getInteger("state") == States.TRACK_CHOOSE);
 		if (init)
 		{
 			List<Document> list = dbDriver.nextViewOrderList(from.getId(), 0);
@@ -187,9 +187,8 @@ public class ViewEntity
 					return;
 				}
 				Document order = list.get(choice - 1);
-				long chatID = order.getLong("chatID");
 				int messageID = order.getInteger("messageID");
-				newMessage.setForward_from_chat(new Chat().setId(chatID));
+				newMessage.setForward_from_chat(new Chat().setId(botChannelID));
 				newMessage.setForward_from_message_id(messageID);
 				try
 				{
@@ -201,6 +200,10 @@ public class ViewEntity
 					{
 						newMessage.setText(Messages.POST_EXISTS_NO_MORE);
 						botInterface.sendMessage(newMessage);
+					}
+					else
+					{
+						result.printStackTrace();
 					}
 				}
 			}
@@ -309,113 +312,101 @@ public class ViewEntity
 			throws MongoException, SuspendExecution, Result
 	{
 		BotInterface botInterface = bot.getInterface();
-		Long chatID = null;
-		Integer messageID = null;
-		if (message.isForwardedFromChannel())
+		Long refChatID = null;
+		Integer refMessageID = null;
+		boolean found = false;
+		if (message.hasText())
 		{
-			if (message.getForward_from_chat().hasUserName())
+			String text = message.getText();
+			if (text.equals(Messages.RETURN_TO_MAIN) || text.startsWith("/start"))
 			{
-				chatID = message.getForward_from_chat().getId();
-				messageID = message.getForward_from_message_id();
+				processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
+				processor.goToState(from.getId(), States.MAIN_MENU);
+				return;
 			}
 			else
 			{
-				chatID = message.getChat().getId();
-				messageID = message.getMessage_id();
-			}
-		}
-		else if (message.isForwardedFromUser())
-		{
-			chatID = message.getChat().getId();
-			messageID = message.getMessage_id();
-			Message newMessage = new Message().setChat(new Chat().setId(botChannel))
-					.setForward_from_chat(new Chat().setId(chatID)).setForward_from_message_id(messageID);
-			try
-			{
-				newMessage = botInterface.forwardMessage(newMessage);
-				chatID = newMessage.getChat().getId();
-				messageID = newMessage.getMessage_id();
-			}
-			catch (Result result)
-			{
-				if (result.getError_code() == 403)
+				Pattern pattern = Pattern.compile("(((http)s?(://))?((telegram|t)\\.me/))+(?<g1>[a-zA-Z]\\w{4,})" +
+						                                  "/(?<g2>\\d+)/?");
+				Matcher matcher = pattern.matcher(text);
+				String channelName;
+				if (matcher.matches())
 				{
-					Logger.ERROR(result);
-					Logger.DEBUG("Error sending user message to bot channel");
-					Logger.TRACE(from);
-					try
-					{
-						Logger.dumpAndSend(bot);
-					}
-					catch (IOException e)
-					{
-						e.printStackTrace();
-					}
-				}
-				return;
-			}
-		}
-		else if (!message.hasText())
-		{
-			return;
-		}
-		else if (message.getText().equals(Messages.RETURN_TO_MAIN) || message.getText().startsWith("/start"))
-		{
-			processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
-			processor.goToState(from.getId(), States.MAIN_MENU);
-			return;
-		}
-		else
-		{
-			Pattern pattern = Pattern.compile("/\\w+/");
-			String messageBody = message.getText();
-			Matcher matcher = pattern.matcher(messageBody);
-			String channelName;
-			if (matcher.find())
-			{
-				channelName = matcher.group();
-				channelName = channelName.substring(1, channelName.length() - 1);
-				chatID = botInterface.getChat("@" + channelName).getId();
-				pattern = Pattern.compile("/\\d+");
-				matcher = pattern.matcher(messageBody);
-				if (matcher.find())
-				{
-					messageID = Integer.parseInt(matcher.group().substring(1));
+					channelName = matcher.group("g1");
+					refChatID = botInterface.getChat("@" + channelName).getId();
+					refMessageID = Integer.parseInt(matcher.group("g2"));
+					found = true;
 				}
 			}
 		}
-		if (!(chatID == null || messageID == null))
+		if (!found)
 		{
-			Chat forwardChat = new Chat().setId(chatID);
-			Message newMessage = new Message().setForward_from_chat(forwardChat);
-			newMessage.setForward_from_message_id(messageID).setChat(message.getChat());
+			if (message.isForwardedFromChannel())
+			{
+				refChatID = message.getForward_from_chat().getId();
+				refMessageID = message.getForward_from_message_id();
+				found = true;
+			}
+			else if (message.isForwardedFromUser())
+			{
+				refChatID = message.getChat().getId();
+				refMessageID = message.getMessage_id();
+				found = true;
+			}
+		}
+		if (found)
+		{
+			Document ref = dbDriver.findByRef(refChatID, refMessageID);
+			int messageID;
+			Chat botChannel = new Chat().setId(botChannelID);
+			if (ref != null)
+			{
+				messageID = ref.getInteger("messageID");
+			}
+			else
+			{
+				try
+				{
+					Message newMessage = new Message().setChat(botChannel);
+					if (message.isForwardedFromChannel() && !message.getForward_from_chat().hasUserName())
+					{
+						newMessage.setForward_from_chat(message.getChat())
+								.setForward_from_message_id(message.getMessage_id());
+					}
+					else
+					{
+						newMessage.setForward_from_chat(new Chat().setId(refChatID))
+								.setForward_from_message_id(refMessageID);
+					}
+					newMessage = botInterface.forwardMessage(newMessage);
+					messageID = newMessage.getMessage_id();
+				}
+				catch (Result result)
+				{
+					message.setText(Messages.POST_INVALID_POST);
+					botInterface.sendMessage(message);
+					return;
+				}
+			}
+			message.setForward_from_chat(botChannel);
+			message.setForward_from_message_id(messageID);
 			try
 			{
-				botInterface.forwardMessage(newMessage);
-			}
-			catch (Result result)
-			{
-//				if (result.getError_code() == 403)
-//				{
-//					message.setText("متاسفانه کانال‌های پرایویت پشتیبانی نمی‌شوند.");
-//					botInterface.sendMessage(message);
-//					return;
-//				}
-				message.setText(Messages.POST_INVALID_POST);
+				botInterface.forwardMessage(message);
+				message.setText(Messages.POST_ENTER_AMOUNT.replace("{coins}", doc.getInteger("coins") + ""));
+				message.setReply_markup(Keyboards.ENTER_INPUT);
 				botInterface.sendMessage(message);
-				return;
+				Document newDoc = new Document(
+						"$set", new Document("state", States.WAITING_FOR_AMOUNT)
+						.append("previous_state", States.POST_ENTER)
+						.append("temp", Arrays.asList(messageID, refChatID, refMessageID))
+				);
+				dbDriver.updateUser(from.getId(), newDoc);
 			}
-//			}
-			message.setText(
-					Messages.POST_ENTER_AMOUNT.replace("{coins}", doc.getInteger("coins") + ""));
-			message.setReply_markup(Keyboards.ENTER_INPUT);
-			botInterface.sendMessage(message);
-			Document newDoc = new Document(
-					"$set", new Document("state", States.WAITING_FOR_AMOUNT)
-					.append("previous_state", States.POST_ENTER)
-					.append("temp", Arrays.asList(chatID, messageID))
-			);
-			dbDriver.updateUser(from.getId(), newDoc);
+			catch (Result result)
+			{
+				result.printStackTrace();
+			}
 		}
 		else
 		{
@@ -457,7 +448,7 @@ public class ViewEntity
 		Message message = new Message().setChat(new Chat().setId(doc.getInteger("userID")));
 		ArrayList temp = (ArrayList) (doc.get("temp"));
 		ArrayList order_amounts = (ArrayList) (doc.get("order_amounts"));
-		doc = dbDriver.insertNewPostViewOrder(userID, (long) temp.get(0), (int) temp.get(1), (int)
+		doc = dbDriver.registerPost(userID, (int) temp.get(0), (long) temp.get(1), (int) temp.get(2), (int)
 				order_amounts.get(0));
 		message.setText(Messages.REQUEST_DONE);
 		botInterface.sendMessage(message);

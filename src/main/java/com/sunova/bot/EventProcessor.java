@@ -58,7 +58,7 @@ public class EventProcessor extends UserInterface
 					viewEntity.getPost(message, from, doc, bot, this);
 					break;
 				case States.CHANNEL_ENTER:
-					memberEntity.enterChannel(message, this);
+					memberEntity.enterChannel(message, doc, this);
 					break;
 				case States.WAITING_FOR_AMOUNT:
 					getAmount(message, from, doc);
@@ -67,30 +67,15 @@ public class EventProcessor extends UserInterface
 					confirmOrder(message, from, doc);
 					break;
 				case States.TRACK_CHOOSE:
-					if (!message.hasText())
-					{
-						return null;
-					}
-					String choice = message.getText();
-					if (choice.equals(Messages.TRACK_POST_REQUESTS))
-					{
-						viewEntity.trackRequests(from, message, doc, botInterface, this, true);
-					}
-					else if (choice.equals(Messages.TRACK_MEMBER_REQUESTS))
-					{
-						
-					}
-					else if (choice.equals(Messages.RETURN_TO_MAIN) || choice.startsWith("/start"))
-					{
-						sendStateMessage(States.MAIN_MENU, doc, from.getId());
-						goToState(from.getId(), States.MAIN_MENU);
-					}
-					else
-						sendStateMessage(States.TRACK_CHOOSE, doc, from.getId());
+					track(message, from, doc);
 					break;
 				case States.TRACK_POSTS:
-					viewEntity.trackRequests(from, message, doc, botInterface, this, false);
+					viewEntity.trackRequests(message, doc, this);
 					break;
+				case States.CHANNEL_DESCRIBE:
+					memberEntity.getDescription(message, doc, this);
+					break;
+
 //				default:
 //					if (message.hasText() && message.getText().contains("/start"))
 //					{
@@ -118,6 +103,32 @@ public class EventProcessor extends UserInterface
 			throwable.printStackTrace();
 		}
 		return null;
+	}
+	
+	private void track (Message message, User from, Document doc) throws SuspendExecution, Result
+	{
+		if (!message.hasText())
+		{
+			return;
+		}
+		String choice = message.getText();
+		if (choice.equals(Messages.TRACK_POST_REQUESTS))
+		{
+			viewEntity.trackRequests(message, doc, this);
+		}
+		else if (choice.equals(Messages.TRACK_MEMBER_REQUESTS))
+		{
+//						memberEntity.trackRequests(from, message, doc, botInterface, this, true);
+		}
+		else if (choice.equals(Messages.RETURN_TO_MAIN) || choice.startsWith("/start"))
+		{
+			sendStateMessage(States.MAIN_MENU, doc, from.getId());
+			goToState(from.getId(), States.MAIN_MENU);
+		}
+		else
+		{
+			sendStateMessage(States.TRACK_CHOOSE, doc, from.getId());
+		}
 	}
 	
 	public Document getUser (Message message, User from) throws SuspendExecution, MongoException
@@ -158,6 +169,7 @@ public class EventProcessor extends UserInterface
 		{
 			sendStateMessage(States.MAIN_MENU, doc, from.getId());
 			goToState(from.getId(), States.MAIN_MENU, null, new Document("temp", "").append("previous_state", ""));
+			return;
 		}
 		ArrayList<Integer> list = new ArrayList<>();
 		Scanner scanner = new Scanner(message.getText());
@@ -172,6 +184,10 @@ public class EventProcessor extends UserInterface
 			if (previousState == States.POST_ENTER)
 			{
 				viewEntity.getAmount(from, list, coins, botInterface);
+			}
+			else if (previousState == States.CHANNEL_ENTER)
+			{
+				memberEntity.getAmount(from, list, coins, botInterface);
 			}
 //						else if (previousState == States.)
 			//TODO add channel
@@ -260,18 +276,18 @@ public class EventProcessor extends UserInterface
 		}
 		else if (choice.equals(Messages.CHANNEL_ORDER))
 		{
-			message.setText("در حال آماده سازی. لطفا چند روز دیگر صبر کنید");
-			botInterface.sendMessage(message);
-//			int coins = doc.getInteger("coins");
-//			if (coins < 2)
-//			{
-//				message.setText(Messages.LOW_CREDITS);
-//				botInterface.sendMessage(message);
-//				sendStateMessage(States.MAIN_MENU, doc, from.getId());
-//				goToState(from.getId(), States.MAIN_MENU);
-//			}
-//			sendStateMessage(States.CHANNEL_ENTER, doc, from.getId());
-//			goToState(from.getId(), States.CHANNEL_ENTER);
+//			message.setText("در حال آماده سازی. لطفا چند روز دیگر صبر کنید");
+//			botInterface.sendMessage(message);
+			int coins = doc.getInteger("coins");
+			if (coins < 2)
+			{
+				message.setText(Messages.LOW_CREDITS);
+				botInterface.sendMessage(message);
+				sendStateMessage(States.MAIN_MENU, doc, from.getId());
+				goToState(from.getId(), States.MAIN_MENU);
+			}
+			sendStateMessage(States.CHANNEL_ENTER, doc, from.getId());
+			goToState(from.getId(), States.CHANNEL_ENTER);
 		}
 		else if (choice.equals(Messages.POST_VIEW))
 		{

@@ -26,13 +26,15 @@ public final class Keyboards
 		GET_PHONE.setKeyboard(buttons);
 		
 		MAIN_MENU = new ReplyKeyboardMarkup();
-		buttons = new KeyboardButton[2][3];
+		buttons = new KeyboardButton[2][4];
+		buttons[0][3] = new KeyboardButton().setText(Messages.CHANNEL_REGISTER);
 		buttons[0][2] = new KeyboardButton().setText(Messages.POST_VIEW);
 		buttons[0][0] = new KeyboardButton().setText(Messages.POST_ORDER);
 		buttons[0][1] = new KeyboardButton().setText(Messages.CHANNEL_ORDER);
-		buttons[1][2] = new KeyboardButton().setText(Messages.TRACK);
-		buttons[1][1] = new KeyboardButton().setText(Messages.REFERRAL_LINK);
-		buttons[1][0] = new KeyboardButton().setText(Messages.CONTACT_US);
+		buttons[1][3] = new KeyboardButton().setText(Messages.TRACK);
+		buttons[1][2] = new KeyboardButton().setText(Messages.REFERRAL_LINK);
+		buttons[1][1] = new KeyboardButton().setText(Messages.CONTACT_US);
+		buttons[1][0] = new KeyboardButton().setText(Messages.OUR_CHANNEL);
 		MAIN_MENU.setKeyboard(buttons);
 		MAIN_MENU.setResize_keyboard(true);
 		

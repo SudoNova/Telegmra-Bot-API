@@ -83,8 +83,8 @@ public class MongoDBDriver
 									}
 							                 );
 							posts.createIndex(
-									new Document("chatID", 1).append("messageID", 1),
-									new IndexOptions().unique(true),
+									new Document("refChatID", 1).append("refMessageID", 1),
+									new IndexOptions().unique(true).background(true),
 									(r2, t2) ->
 									{
 										if (t2 != null)
@@ -92,6 +92,16 @@ public class MongoDBDriver
 											asyncFailed(t2);
 										}
 									}
+							                 );
+							posts.createIndex(new Document("messageID", 1),
+							                  new IndexOptions().unique(true).background(true),
+							                  (r2, t2) ->
+							                  {
+								                  if (t2 != null)
+								                  {
+									                  asyncFailed(t2);
+								                  }
+							                  }
 							                 );
 							channels.createIndex(
 									new Document("chatID", 1),
@@ -486,7 +496,7 @@ public class MongoDBDriver
 	}
 	
 	//TODO fix
-	public void errorSendingPost (long chatID, int messageID) throws SuspendExecution, MongoException
+	public void errorSendingPost (int messageID) throws SuspendExecution, MongoException
 	{
 		try
 		{
@@ -497,9 +507,7 @@ public class MongoDBDriver
 				protected void requestAsync ()
 				{
 					posts.findOneAndUpdate(
-							and(eq("chatID", chatID),
-							    eq("messageID", messageID)
-							   ),
+							new Document("messageID", messageID),
 							new Document("$inc", new Document("errorCount", 1)),
 							new FindOneAndUpdateOptions().upsert(true),
 							(r, t) ->
@@ -524,12 +532,42 @@ public class MongoDBDriver
 		
 	}
 	
-	public Document insertNewPostViewOrder (int userID, long chatID, int messageID, int amount)
+	public Document findByRef (long refChatID, int refMessageID) throws SuspendExecution, MongoException
+	{
+		try
+		{
+			return new FiberAsync<Document, MongoException>()
+			{
+				
+				@Override
+				protected void requestAsync ()
+				{
+					posts.find(new Document("refMessageID", refMessageID).append("refChatID", refChatID))
+							.first((r, t)
+									       ->
+							       {
+								       if (t != null)
+								       {
+									       asyncFailed(t);
+								       }
+								       asyncCompleted(r);
+							       });
+				}
+			}.run();
+		}
+		catch (InterruptedException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public Document registerPost (int userID, int messageID, Long refChatID, Integer refMessageID, int amount)
 			throws SuspendExecution, MongoException
 	{
 		try
 		{
-			new FiberAsync<Document, MongoException>()
+			new FiberAsync<Void, MongoException>()
 			{
 				@Override
 				protected void requestAsync ()
@@ -543,23 +581,47 @@ public class MongoDBDriver
 							{
 								int postReqId = result.getInteger("postReqID");
 								long time = System.currentTimeMillis();
-								Document newDoc = new Document("postReqID", postReqId)
+								Document push = new Document("postReqID", postReqId)
 										.append("ownerID", userID).append("startDate", time)
 										.append("amount", amount).append("remaining", amount)
 										.append("viewCount", 0).append("endDate", time);
+								Document set = new Document("errorCount", 0);
 								posts.updateOne(
-										and(eq("chatID", chatID), eq("messageID", messageID)),
-										new Document("$push", new Document("orders", newDoc))
-												.append("$set", new Document("errorCount", 0)),
-										new UpdateOptions().upsert(true), (rr, tt) ->
+										and(new Document("refChatID", refChatID),
+										    new Document("refMessageID", refMessageID)
+										   ),
+										new Document("$push", new Document("orders", push))
+												.append("$set", set), (r2, t2) ->
 										{
-											if (t != null)
+											if (t2 != null)
 											{
-												asyncFailed(t);
+												asyncFailed(t2);
 											}
 											else
 											{
-												asyncCompleted(result);
+												if (r2.getModifiedCount() == 0)
+												{
+													set.append("refChatID", refChatID)
+															.append("refMessageID", refMessageID);
+													posts.updateOne(
+															new Document("messageID", messageID),
+															new Document("$push", new Document("orders", push))
+																	.append("$set", set),
+															new UpdateOptions().upsert(true),
+															(r3, t3) ->
+															{
+																if (t3 != null)
+																{
+																	asyncFailed(t3);
+																}
+																asyncCompleted(null);
+															}
+													               );
+												}
+												else
+												{
+													asyncCompleted(null);
+												}
 											}
 										}
 								               );
@@ -621,7 +683,9 @@ public class MongoDBDriver
 								                )
 								            )
 								  )
-						              )).batchSize(1).batchCursor(
+						              ))
+								.projection(
+										new Document("orders.$", 1).append("messageID", 1)).batchSize(1).batchCursor(
 								(r, t) ->
 								{
 									if (t != null)
@@ -641,49 +705,110 @@ public class MongoDBDriver
 				batchMap.put(userID, cursor);
 				batchMapLock.writeLock().unlock();
 			}
-			final AsyncBatchCursor<Document> temp = cursor;
-			try
-			{
-				Document result = new FiberAsync<Document, MongoException>()
-				{
-					@Override
-					protected void requestAsync ()
-					{
-						temp.next(
-								(r, t) ->
-								{
-									if (t != null)
-									{
-										asyncFailed(t);
-									}
-									else
-									{
-										try
-										{
-											asyncCompleted(r.get(0));
-										}
-										catch (NullPointerException e)
-										{
-											asyncCompleted(null);
-										}
-									}
-								});
-					}
-				}.run();
-				return result;
-			}
-			catch (MongoCursorNotFoundException e)
-			{
-				batchMapLock.writeLock().lock();
-				batchMap.remove(userID);
-				batchMapLock.writeLock().unlock();
-				return nextPost(userID);
-			}
+			return getNextCursorItem(userID, cursor);
 		}
 		catch (InterruptedException e)
 		{
 			e.printStackTrace();
 			return null;
+		}
+	}
+	
+	public Document nextChannel (int userID) throws SuspendExecution, MongoException
+	{
+		batchMapLock.readLock().lock();
+		AsyncBatchCursor<Document> cursor = batchMap.get(userID);
+		batchMapLock.readLock().unlock();
+		try
+		{
+			if (cursor == null || cursor.isClosed())
+			{
+				cursor = new FiberAsync<AsyncBatchCursor<Document>, MongoException>()
+				{
+					@Override
+					protected void requestAsync ()
+					{
+						channels.find(and(
+								elemMatch("orders", and(
+										gt("remaining", 0),
+										ne("ownerID", userID)
+								                       )),
+								or(nin("members.userID", userID),
+								   elemMatch("members",
+								             and(eq("userID", userID),
+								                 or(lte("remaining", 0)
+										                 , eq("exited", true))
+								                )
+								            )
+								  )
+						                 )).batchSize(1).batchCursor( //FIXME this is incorrect requires projection
+						                                              (r, t) ->
+						                                              {
+							                                              if (t != null)
+							                                              {
+								                                              asyncFailed(t);
+							                                              }
+							                                              else
+							                                              {
+								                                              asyncCompleted(r);
+							                                              }
+						                                              });//.projection(Projections.elemMatch("orders"));
+						
+						
+					}
+				}.run();
+				batchMapLock.writeLock().lock();
+				batchMap.put(userID, cursor);
+				batchMapLock.writeLock().unlock();
+			}
+			return getNextCursorItem(userID, cursor);
+		}
+		catch (InterruptedException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	private Document getNextCursorItem (int userID, final AsyncBatchCursor<Document> cursor)
+			throws SuspendExecution, InterruptedException
+	{
+		try
+		{
+			Document result = new FiberAsync<Document, MongoException>()
+			{
+				@Override
+				protected void requestAsync ()
+				{
+					cursor.next(
+							(r, t) ->
+							{
+								if (t != null)
+								{
+									asyncFailed(t);
+								}
+								else
+								{
+									try
+									{
+										asyncCompleted(r.get(0));
+									}
+									catch (NullPointerException e)
+									{
+										asyncCompleted(null);
+									}
+								}
+							});
+				}
+			}.run();
+			return result;
+		}
+		catch (MongoCursorNotFoundException e)
+		{
+			batchMapLock.writeLock().lock();
+			batchMap.remove(userID);
+			batchMapLock.writeLock().unlock();
+			return nextPost(userID);
 		}
 	}
 	
@@ -700,7 +825,7 @@ public class MongoDBDriver
 					
 					ArrayList<Bson> list = new ArrayList<>(6);
 					list.add(match(eq("orders.ownerID", userID)));
-					list.add(project(new Document("_id", 0).append("orders", 1).append("chatID", 1)
+					list.add(project(new Document("_id", 0).append("orders", 1)
 							                 .append("messageID", 1)));
 					list.add(unwind("$orders"));
 					list.add(sort(new Document("orders.startDate", -1)));
@@ -827,6 +952,64 @@ public class MongoDBDriver
 					                      );
 				}
 			}.run();
+		}
+		catch (InterruptedException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public Document registerChannel (int days, int persons, String userName, long channelID, String description,
+	                                 int ownerID) throws SuspendExecution, MongoException
+	{
+		try
+		{
+			new FiberAsync<Document, MongoException>()
+			{
+				@Override
+				protected void requestAsync ()
+				{
+					misc.findOneAndUpdate(
+							new Document(),
+							new Document("$inc", new Document("channelReqID", 1)),
+							new FindOneAndUpdateOptions().upsert(true)
+									.returnDocument(ReturnDocument.AFTER),
+							(result, t) ->
+							{
+								int channelReqID = result.getInteger("channelReqID");
+								long time = System.currentTimeMillis();
+								Document newDoc = new Document("channelReqID", channelReqID)
+										.append("ownerID", ownerID).append("startDate", time)
+										.append("persons", persons).append("days", days)
+										.append("remaining", days * persons)
+										.append("description", description).append("entered", 0)
+										.append("left", 0).append("endDate", time);
+								channels.updateOne(
+										new Document("chatID", channelID),
+										new Document("$push", new Document("orders", newDoc))
+												.append("$set", new Document("warned", false)
+														.append("userName", userName)),
+										new UpdateOptions().upsert(true), (rr, tt) ->
+										{
+											if (t != null)
+											{
+												asyncFailed(t);
+											}
+											else
+											{
+												asyncCompleted(result);
+											}
+										}
+								                  );
+								
+							}
+					                     );
+				}
+			}.run();
+			return updateUser(
+					ownerID, new Document("$inc", new Document("coins", -days * persons * MemberEntity
+							.memberFactor)));
 		}
 		catch (InterruptedException e)
 		{

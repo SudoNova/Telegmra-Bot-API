@@ -131,6 +131,10 @@ public class JsonParser
 			{
 				resultValue = p.getCodec().treeToValue(tree, User.class);
 			}
+			else if (tree.has("status"))
+			{
+				resultValue = p.getCodec().treeToValue(tree, ChatMember.class);
+			}
 			else
 			{
 				System.out.println("NONE");

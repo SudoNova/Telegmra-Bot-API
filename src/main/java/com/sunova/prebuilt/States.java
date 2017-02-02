@@ -15,5 +15,5 @@ public final class States
 	public static final int CONFIRM_VIEW_POST = 8;
 	public static final int TRACK_CHOOSE = 9;
 	public static final int TRACK_POSTS = 10;
-	
+	public static final int CHANNEL_DESCRIBE = 11;
 }

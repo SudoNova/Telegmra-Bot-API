@@ -49,6 +49,14 @@ public final class Messages
 	public static final String CHANNEL_PRIVATE;
 	public static final String CHANNEL_ENTER;
 	public static final String AMOUNT_ZERO;
+	public static final String AMOUNT_ONE;
+	public static final String CHANNEL_INVALID_LINK;
+	public static final String CHANNEL_NOT_ADMIN;
+	public static final String CHANNEL_ENTER_AMOUNT;
+	public static final String CHANNEL_ENTER_DESCRIPTION;
+	public static final String LENGTH_EXCEEDED;
+	public static final String CHANNEL_REGISTER;
+	public static final String OUR_CHANNEL;
 	
 	static
 	{
@@ -120,6 +128,18 @@ public final class Messages
 		CHANNEL_PRIVATE = "کانالی که سعی در ثبت آن دارید خصوصی است. کانال‌های خصوصی پشتیبانی نمی‌شوند";
 		CHANNEL_ENTER = "لطفا لینک کانال خود را ارسال کنید. کانال‌های خصوصی قابل پذیرش نیستند";
 		AMOUNT_ZERO = "لطفا یک مقدار مثبت وارد کنید";
+		CHANNEL_INVALID_LINK = "لطفا لینک کانال را به درستی وارد کنید";
+		CHANNEL_NOT_ADMIN = "بات ادمین کانال شما نیست. لطفا ابتدا بات را ادمین کنید";
+		CHANNEL_ENTER_AMOUNT = "لطفا مقدار را وارد کنید";
+		AMOUNT_ONE = "شما فقط تعداد روز را وارد کرده‌اید. لطفا دوباره مقادیر را وارد نمایید.\n" +
+				"توجه داشته باشید که باید عدد سمت چپی تعداد روز و عدد سمت راستی تعداد نفرات باشد.";
+		CHANNEL_ENTER_DESCRIPTION =
+				"شما قصد خرید {persons} عضویت به مدت {days} روز و به ازرش {amount} سکه را دارید.\n" +
+						"لطفا توضیحات کانال را وارد بفرمایید. توجه داشته باشید که توضیحات کانال" +
+						" نباید بیش از ۲۵۰ کاراکتر باشد.";
+		LENGTH_EXCEEDED = "طول توضیحات کانال بیش از ۲۵۰ کاراکتر است. لطفا آن را کوتاه کنید.";
+		CHANNEL_REGISTER = "عضویت در کانال‌ها";
+		OUR_CHANNEL = "کانال ما";
 //		}
 
 //		catch (UnsupportedEncodingException e)

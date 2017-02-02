@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 
@@ -71,7 +72,6 @@ public class BotInterface
 		{
 			HttpPost post = new HttpPost();
 			post.setURI(new URI(Transceiver.getPath() + "getChat"));
-			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
 			Result result = sendRequest(post);
 			if (!result.isOk())
@@ -384,6 +384,37 @@ public class BotInterface
 		}
 	}
 	
+	public ChatMember[] getChatAdministrators (long chatID) throws SuspendExecution, Result
+	{
+		return getChatAdministrators(chatID + "");
+	}
+	
+	public ChatMember[] getChatAdministrators (String chatID) throws SuspendExecution, Result
+	{
+		List<NameValuePair> list = new ArrayList<>(3);
+		list.add(new BasicNameValuePair("chat_id", chatID));
+		try
+		{
+			HttpPost post = new HttpPost();
+			post.setURI(new URI(Transceiver.getPath() + "getChatAdministrators"));
+			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
+			Result result = sendRequest(post);
+			if (!result.isOk())
+			{
+				throw result;
+			}
+			else
+			{
+				TObject[] results = result.getResult();
+				return Arrays.copyOf(results, results.length, ChatMember[].class);
+			}
+		}
+		catch (IOException | URISyntaxException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
 }
 
 

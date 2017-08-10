@@ -72,6 +72,7 @@ public class BotInterface
 		{
 			HttpPost post = new HttpPost();
 			post.setURI(new URI(Transceiver.getPath() + "getChat"));
+			post.addHeader("Content-Type", "application/x-www-form-urlencoded");
 			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
 			Result result = sendRequest(post);
 			if (!result.isOk())
@@ -90,7 +91,7 @@ public class BotInterface
 		}
 	}
 	
-	public Chat getChat (int chatID) throws SuspendExecution, Result
+	public Chat getChat (long chatID) throws SuspendExecution, Result
 	{
 		return getChat(chatID + "");
 	}
@@ -286,9 +287,10 @@ public class BotInterface
 		
 	}
 	
-	public void registerHandler (EventHandler handler)
+	public BotInterface registerHandler (EventHandler handler)
 	{
 		handlers.add(0, handler);
+		return this;
 	}
 	
 	public void removeHandler (EventHandler handler)
@@ -298,37 +300,18 @@ public class BotInterface
 	
 	protected void processUpdates (Result result)
 	{
-		TObject[] results = result.getResult();
-		for (TObject i : results)
+		try
 		{
-			processUpdate((Update) i);
-		}
-	}
-	
-	void receiveResult (Result resultSet)
-	{
-		if (!resultSet.isOk())
-		{
-			System.err.println(resultSet.getDescription());
-			return;
-		}
-		for (TObject i : resultSet.getResult())
-		{
-			TObject object = i;
-			if (object instanceof Update)
+			TObject[] results = result.getResult();
+			
+			for (TObject i : results)
 			{
-				Update update = (Update) object;
-				processUpdate(update);
+				processUpdate((Update) i);
 			}
-
-//			else if (object instanceof Message)
-//			{
-//				Message message = (Message) object;
-//				if (message.getFrom().getId() == bot.getId())
-//				{
-//
-//				}
-//			}
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
 		}
 	}
 	
@@ -407,6 +390,39 @@ public class BotInterface
 			{
 				TObject[] results = result.getResult();
 				return Arrays.copyOf(results, results.length, ChatMember[].class);
+			}
+		}
+		catch (IOException | URISyntaxException e)
+		{
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public ChatMember getChatMember (long chatID, int userID) throws SuspendExecution, Result
+	{
+		return getChatMember(chatID + "", userID);
+	}
+	
+	public ChatMember getChatMember (String chatID, int userID) throws SuspendExecution, Result
+	{
+		List<NameValuePair> list = new ArrayList<>(3);
+		list.add(new BasicNameValuePair("chat_id", chatID));
+		list.add(new BasicNameValuePair("user_id", userID + ""));
+		try
+		{
+			HttpPost post = new HttpPost();
+			post.setURI(new URI(Transceiver.getPath() + "getChatMember"));
+			post.setEntity(new UrlEncodedFormEntity(list, "UTF-8"));
+			Result result = sendRequest(post);
+			if (!result.isOk())
+			{
+				throw result;
+			}
+			else
+			{
+				TObject[] results = result.getResult();
+				return (ChatMember) results[0];
 			}
 		}
 		catch (IOException | URISyntaxException e)

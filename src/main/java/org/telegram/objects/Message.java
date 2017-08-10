@@ -22,7 +22,9 @@ public class Message implements TObject
 	private User from;
 	private User forward_from;
 	private User new_chat_member;
+	private User new_chat_participant;
 	private User left_chat_member;
+	private User left_chat_participant;
 	private Chat chat;
 	private Chat forward_from_chat;
 	private Message reply_to_message;
@@ -376,7 +378,7 @@ public class Message implements TObject
 	{
 		return contact;
 	}
-
+	
 	@JsonGetter ("contact")
 	public Message setContact (Contact contact)
 	{
@@ -445,6 +447,7 @@ public class Message implements TObject
 	{
 		return text != null;
 	}
+	
 	@JsonGetter ("reply_to_message")
 	public Message getReply_to_message ()
 	{
@@ -523,4 +526,29 @@ public class Message implements TObject
 		return this;
 	}
 	
+	@JsonGetter ("new_chat_participant")
+	public User getNew_chat_participant ()
+	{
+		return new_chat_participant;
+	}
+	
+	@JsonSetter ("new_chat_participant")
+	public Message setNew_chat_participant (User new_chat_participant)
+	{
+		this.new_chat_participant = new_chat_participant;
+		return this;
+	}
+	
+	@JsonGetter ("left_chat_participant")
+	public User getLeft_chat_participant ()
+	{
+		return left_chat_participant;
+	}
+	
+	@JsonSetter ("left_chat_participant")
+	public Message setLeft_chat_participant (User left_chat_participant)
+	{
+		this.left_chat_participant = left_chat_participant;
+		return this;
+	}
 }

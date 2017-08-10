@@ -11,9 +11,10 @@ public final class States
 	public static final int POST_ENTER = 4;
 	public static final int CHANNEL_ENTER = 5;
 	public static final int WAITING_FOR_AMOUNT = 6;
-	public static final int CONFIRM_VIEW_ORDER = 7;
-	public static final int CONFIRM_VIEW_POST = 8;
+	public static final int POST_CONFIRM_ORDER = 7;
+	public static final int POST_CONFIRM_VIEW = 8;
 	public static final int TRACK_CHOOSE = 9;
 	public static final int TRACK_POSTS = 10;
 	public static final int CHANNEL_DESCRIBE = 11;
+	public static final int CHANNEL_CONFIRM_JOIN = 12;
 }

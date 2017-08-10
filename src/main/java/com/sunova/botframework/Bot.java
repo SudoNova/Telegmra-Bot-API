@@ -42,6 +42,8 @@ public class Bot
 		in = System.in;
 		serialNumberTracker = new AtomicInteger(0);
 		botRepos = new ArrayList<>(5);
+		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
+		//TODO Full configuration process
 	}
 	
 	String domainAddress;
@@ -138,8 +140,6 @@ public class Bot
 		{
 			temp.mkdirs();
 		}
-		System.setProperty("co.paralleluniverse.fibers.detectRunawayFibers", "false");
-		//May be added to a static constructor
 		try
 		{
 			File certFile = new File(resourcesPath + "cert\\" + "cert.pem");

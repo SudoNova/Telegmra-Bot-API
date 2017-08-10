@@ -1,10 +1,10 @@
 package com.sunova.bot;
 
 import co.paralleluniverse.fibers.SuspendExecution;
+import com.ibm.icu.util.Calendar;
 import com.mongodb.MongoException;
 import com.sunova.botframework.Bot;
 import com.sunova.botframework.BotInterface;
-import com.sunova.botframework.Logger;
 import com.sunova.prebuilt.Keyboards;
 import com.sunova.prebuilt.Messages;
 import com.sunova.prebuilt.States;
@@ -14,7 +14,6 @@ import org.telegram.objects.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,15 +25,17 @@ public class ViewEntity
 {
 	static final int visitFactor = 2;
 	private static final long botChannelID = -1001066076268L;
+	private EventProcessor processor;
 	private MongoDBDriver dbDriver;
 	
-	public ViewEntity (MongoDBDriver dbDriver)
+	public ViewEntity (MongoDBDriver dbDriver, EventProcessor processor)
 	{
 		this.dbDriver = dbDriver;
+		this.processor = processor;
 	}
 	
 	
-	public void confirmViewPost (Message message, Document user, EventProcessor processor)
+	public void confirmViewPost (Message message, Document user)
 			throws SuspendExecution, MongoException, Result
 	{
 		int userID = user.getInteger("userID");
@@ -46,7 +47,7 @@ public class ViewEntity
 			user = dbDriver.confirmVisit(userID, postReqID);
 			if (choice.contains(Messages.POST_VIEW_AGAIN.substring(0, 14)))
 			{
-				goToNextPost(user, processor);
+				goToNextPost(user, true);
 			}
 			else if (choice.equals(Messages.POST_VIEW_CONFIRMED) || choice.startsWith("/start"))
 			{
@@ -57,7 +58,7 @@ public class ViewEntity
 		}
 	}
 	
-	void goToNextPost (Document user, EventProcessor processor)
+	void goToNextPost (Document user, boolean refresh)
 			throws SuspendExecution, MongoException, Result
 	{
 		int userID = user.getInteger("userID");
@@ -66,13 +67,17 @@ public class ViewEntity
 		Document newDoc = dbDriver.nextPost(userID);
 		if (newDoc != null)
 		{
-			ReplyKeyboardMarkup keyboard = Keyboards.POST_CONFIRM_ORDER;
-			int coins = user.getInteger("coins");
-			keyboard.getKeyboard()[0][0].setText(Messages.POST_VIEW_AGAIN.replace
-					("{coins}", coins + ""));
-			message.setText(Messages.POST_VIEW_NOTE);
-			message.setReply_markup(keyboard);
-			botInterface.sendMessage(message);
+			
+			if (refresh)
+			{
+				int coins = user.getInteger("coins");
+				ReplyKeyboardMarkup keyboard = Keyboards.POST_CONFIRM_ORDER;
+				keyboard.getKeyboard()[0][0].setText(Messages.POST_VIEW_AGAIN.replace
+						("{coins}", coins + ""));
+				message.setText(Messages.POST_VIEW_NOTE);
+				message.setReply_markup(keyboard);
+				botInterface.sendMessage(message);
+			}
 			Chat chat = new Chat();
 			int messageID = newDoc.getInteger("messageID");
 			chat.setId(botChannelID);
@@ -89,12 +94,12 @@ public class ViewEntity
 				result.fillInStackTrace();
 				result.printStackTrace();
 				dbDriver.errorSendingPost(messageID);
-				goToNextPost(user, processor);
+				goToNextPost(user, false);
 				return;
 			}
 			Document updateDoc = new Document(new Document("temp", new Document("postReqID", postReqID)
 			));
-			processor.goToState(userID, States.CONFIRM_VIEW_POST, updateDoc, null);
+			processor.goToState(userID, States.POST_CONFIRM_VIEW, updateDoc, null);
 		}
 		else
 		{
@@ -106,7 +111,7 @@ public class ViewEntity
 		}
 	}
 	
-	void trackRequests (Message message, Document doc, EventProcessor processor)
+	void trackRequests (Message message, Document doc)
 			throws SuspendExecution, MongoException, Result
 	{
 		User from = message.getFrom();
@@ -122,14 +127,14 @@ public class ViewEntity
 		if (init)
 		{
 			List<Document> list = dbDriver.nextViewOrderList(from.getId(), 0);
-			if (checkForZeroOrders(from, doc, botInterface, processor, newMessage, list))
+			if (checkForZeroOrders(from, doc, botInterface, newMessage, list))
 			{
 				return;
 			}
 			int listSize = list.size();
 			ReplyKeyboardMarkup keyboard = getTrackKeyboard(true, listSize);
 			newMessage.setReply_markup(keyboard);
-			String newText = getTrackString(list);
+			String newText = getTrackString(list, 0);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
 			processor.goToState(from.getId(), States.TRACK_POSTS, new Document("temp", 0), null);
@@ -145,7 +150,7 @@ public class ViewEntity
 			int listSize = list.size();
 			ReplyKeyboardMarkup keyboard = getTrackKeyboard(skip == 0, listSize);
 			newMessage.setReply_markup(keyboard);
-			String newText = getTrackString(list);
+			String newText = getTrackString(list, skip);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
 			dbDriver.updateUser(from.getId(), new Document("$set", new Document("temp", skip)));
@@ -161,7 +166,7 @@ public class ViewEntity
 			int listSize = list.size();
 			ReplyKeyboardMarkup keyboard = getTrackKeyboard(false, listSize);
 			newMessage.setReply_markup(keyboard);
-			String newText = getTrackString(list);
+			String newText = getTrackString(list, skip);
 			newMessage.setText(newText);
 			botInterface.sendMessage(newMessage);
 			dbDriver.updateUser(from.getId(), new Document("$set", new Document("temp", skip)));
@@ -215,20 +220,23 @@ public class ViewEntity
 	}
 	
 	@NotNull
-	private String getTrackString (List<Document> list)
+	private String getTrackString (List<Document> list, int skip)
 	{
 		int listSize = list.size();
 		StringBuilder builder = new StringBuilder();
 		listSize = listSize == 11 ? 10 : listSize;
-		builder.append("برای دیدن پست مربوط به هر سفارش، روی دکمه مربوط به شماره آن کلیک کنید");
+		builder.append("برای دیدن پست مربوط به هر سفارش، روی دکمه مربوط به شماره آن کلیک کنید\n");
 		for (int i = 0; i < listSize; i++)
 		{
 			Document doc = (Document) list.get(i).get("orders");
-			builder.append("\n-------\n");
-			builder.append(i + 1).append(".").append("\n");
+			builder.append("------------\n");
+			builder.append(i + 1 + skip).append(".").append("\t\t");
+			Calendar cal = (Calendar) EventProcessor.cal.clone();
+			cal.setTimeInMillis(doc.getLong("startDate"));
+			String date = EventProcessor.df.format(cal);
 			builder.append(
 					Messages.TRACK_POST_TEMPLATE.replace("{id}", doc.getInteger("postReqID") + "")
-							.replace("{date}", new Date(doc.getLong("startDate")).toString())
+							.replace("{date}", date)
 							.replace("{amount}", doc.getInteger("amount") + "")
 							.replace("{viewCount}", doc.getInteger("viewCount") + "")
 							.replace("{remaining}", doc.getInteger("remaining") + "")
@@ -236,13 +244,15 @@ public class ViewEntity
 			int remaining = doc.getInteger("remaining");
 			if (remaining == 0)
 			{
-				builder.append("زمان پایان سفارش : ").append(new Date(doc.getLong("endDate")).toString());
+				cal.setTimeInMillis(doc.getLong("endDate"));
+				date = EventProcessor.df.format(cal);
+				builder.append("زمان پایان سفارش: ").append(date).append("\n");
 			}
 		}
 		return builder.toString();
 	}
 	
-	private boolean checkForZeroOrders (User from, Document doc, BotInterface botInterface, EventProcessor processor,
+	private boolean checkForZeroOrders (User from, Document doc, BotInterface botInterface,
 	                                    Message newMessage, List<Document> list) throws SuspendExecution, Result
 	{
 		if (list == null || list.size() == 0)
@@ -254,7 +264,6 @@ public class ViewEntity
 			}
 			catch (Result result)
 			{
-				Logger.ERROR(result);
 			}
 			processor.sendStateMessage(States.MAIN_MENU, doc, from.getId());
 			processor.goToState(from.getId(), States.MAIN_MENU);
@@ -267,14 +276,6 @@ public class ViewEntity
 	{
 		ReplyKeyboardMarkup keyboard = new ReplyKeyboardMarkup().setResize_keyboard(true);
 		int keyboardSize = listSize / 6 + 2;
-		if (listSize == 11)
-		{
-			keyboardSize++;
-		}
-		if (!init)
-		{
-			keyboardSize++;
-		}
 		KeyboardButton[][] buttons = new KeyboardButton[keyboardSize][];
 		int j = 0;
 		buttons[j] = new KeyboardButton[listSize >= 5 ? 5 : listSize];
@@ -292,23 +293,31 @@ public class ViewEntity
 			}
 			j++;
 		}
+		int k = 1;
 		if (listSize == 11)
 		{
-			buttons[j] = new KeyboardButton[1];
-			buttons[j++][0] = new KeyboardButton().setText(Messages.PREVIOUS);
+			k++;
 		}
 		if (!init)
 		{
-			buttons[j] = new KeyboardButton[1];
-			buttons[j++][0] = new KeyboardButton().setText(Messages.NEXT);
+			k++;
 		}
-		buttons[j] = new KeyboardButton[1];
-		buttons[j][0] = new KeyboardButton().setText(Messages.RETURN_TO_MAIN);
+		buttons[j] = new KeyboardButton[k];
+		k = 0;
+		if (listSize == 11)
+		{
+			buttons[j][k++] = new KeyboardButton().setText(Messages.PREVIOUS);
+		}
+		buttons[j][k] = new KeyboardButton().setText(Messages.RETURN_TO_MAIN);
+		if (!init)
+		{
+			buttons[j][++k] = new KeyboardButton().setText(Messages.NEXT);
+		}
 		keyboard.setKeyboard(buttons);
 		return keyboard;
 	}
 	
-	public void getPost (Message message, User from, Document doc, Bot bot, EventProcessor processor)
+	public void getPost (Message message, User from, Document doc, Bot bot)
 			throws MongoException, SuspendExecution, Result
 	{
 		BotInterface botInterface = bot.getInterface();
@@ -431,7 +440,7 @@ public class ViewEntity
 		else
 		{
 			Document newDoc = new Document("$set", new Document("order_amounts", list)
-					.append("state", States.CONFIRM_VIEW_ORDER));
+					.append("state", States.POST_CONFIRM_ORDER));
 			message.setText(
 					Messages.POST_CONFIRM_ORDER.replace("{amount}", list.get(0) + "").replace
 							("{value}", list.get(0) * visitFactor + ""));
@@ -441,8 +450,7 @@ public class ViewEntity
 		}
 	}
 	
-	public void confirmOrder (User from, Document doc, BotInterface botInterface,
-	                          EventProcessor processor) throws SuspendExecution, Result
+	public void confirmOrder (User from, Document doc, BotInterface botInterface) throws SuspendExecution, Result
 	{
 		int userID = from.getId();
 		Message message = new Message().setChat(new Chat().setId(doc.getInteger("userID")));

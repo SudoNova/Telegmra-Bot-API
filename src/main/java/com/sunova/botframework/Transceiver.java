@@ -6,6 +6,7 @@ import co.paralleluniverse.fibers.httpclient.FiberHttpClientBuilder;
 import co.paralleluniverse.fibers.io.FiberFileChannel;
 import co.paralleluniverse.strands.Strand;
 import org.apache.http.*;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
@@ -20,6 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.telegram.objects.Result;
 import org.telegram.objects.Update;
+import org.telegram.objects.WebhookInfo;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -49,6 +51,15 @@ class Transceiver
 	static CloseableHttpClient client;
 	private static String path = "https://api.telegram.org/bot<token>/";
 	private static ArrayList<Transceiver> repos;
+	AtomicInteger updateIndex;
+	BotInterface botInterface;
+	private ConcurrentLinkedQueue<Fiber> failureQueue;
+	private boolean isFailure;
+	private boolean shutDown;
+	private Bot bot;
+	private boolean shutdown = false;
+	private JsonParser parser;
+	private Daemon daemon;
 	
 	static
 	{
@@ -120,28 +131,16 @@ class Transceiver
 		{
 			SSLContext context = builder.build();
 			context.init(null, new TrustManager[]{trustManager}, null);
-			client = FiberHttpClientBuilder.create().setSSLContext(context).build();
+			client = FiberHttpClientBuilder.create().setSSLContext(context)
+					.setDefaultRequestConfig(RequestConfig.custom().setConnectTimeout(1000)
+							                         .setSocketTimeout(1000).build()).build();
 		}
 		catch (NoSuchAlgorithmException | KeyManagementException e)
 		{
 			e.printStackTrace();
 			System.exit(-1);
 		}
-//		client = FiberHttpClientBuilder.create().setHostnameVerifier(verifier).build();
 	}
-	
-	AtomicInteger updateIndex;
-	BotInterface botInterface;
-	private ConcurrentLinkedQueue<Fiber> failureQueue;
-	private boolean isUsingWebhook;
-	private boolean isFailure;
-	private boolean shutDown;
-	private UpdatePuller updatePuller;
-	private Bot bot;
-	private boolean shutdown = false;
-	private JsonParser parser;
-	private KeepAliveDaemon daemon;
-	private long lastUpdateTime;
 	
 	private Transceiver (Bot bot)
 	{
@@ -149,10 +148,9 @@ class Transceiver
 		path = path.replace("<token>", bot.token);
 		parser = JsonParser.getInstance();
 		
-		updatePuller = new UpdatePuller();
 		updateIndex = new AtomicInteger(0);
 		failureQueue = new ConcurrentLinkedQueue<>();
-		daemon = new KeepAliveDaemon();
+		daemon = new Daemon();
 		if (Strand.isCurrentFiber())
 		{
 			try
@@ -211,7 +209,6 @@ class Transceiver
 		{
 			System.exit(-1);
 		}
-		updatePuller.start();
 		daemon.start();
 	}
 	
@@ -253,8 +250,7 @@ class Transceiver
 			if (message instanceof HttpRequest)
 			{
 				byteValue = EntityUtils.toByteArray(((HttpEntityEnclosingRequest)
-						(message))
-						                                    .getEntity());
+						(message)).getEntity());
 			}
 			else
 			{
@@ -274,69 +270,33 @@ class Transceiver
 	{
 		Update result = parseUpdate(request);
 		notifySuccess();
-		lastUpdateTime = System.currentTimeMillis();
 		botInterface.processUpdate(result);
 	}
 	
-	protected void getUpdates (int updateIndex) throws SuspendExecution
+	protected int getUpdates (int updateIndex) throws SuspendExecution, Result
 	{
 		HttpGet req = new HttpGet(Transceiver.getPath() + "getUpdates" + (updateIndex == 0 ? "" : "?offset=" +
 				updateIndex));
 		try
 		{
 			Result result = getResult(client.execute(req));
-			lastUpdateTime = System.currentTimeMillis();
 			notifySuccess();
 			botInterface.processUpdates(result);
-		}
-		catch (Result r)
-		{
-			if (r.getError_code() == 409)
-			{
-				if (r.getMessage().contains("can't use getUpdates method while webhook is active"))
-				{
-					try
-					{
-						if (System.currentTimeMillis() - lastUpdateTime < 2001)
-						{
-							return;
-						}
-						boolean success = disableWebhook();
-						if (success)
-						{
-							System.err.println("Couldn't get updates by polling, so" +
-									                   " webhook is disabled");
-						}
-						else
-						{
-							System.err.println("Can't get updates by polling and can't disbale webhook either");
-							//TODO complete re-connecting mechanism
-						}
-					}
-					catch (InterruptedException e)
-					{
-						e.printStackTrace();
-					}
-				}
-				else if (r.getMessage().contains("terminated by other setWebhook"))
-				{
-					Fiber.park();
-				}
-			}
-			else
-			{
-				r.printStackTrace();
-			}
+			return result.getResult().length;
 		}
 		catch (IOException e)
 		{
 			
 		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		return -1;
 	}
 	
 	Result execute (HttpUriRequest request) throws SuspendExecution, Result
 	{
-//		System.out.println("Transceiver executing request");
 		int tryCount = 3;
 		while (true)
 		{
@@ -348,7 +308,7 @@ class Transceiver
 				{
 					notifySuccess();
 					Result result = getResult(response);
-					botInterface.receiveResult(result);
+//					botInterface.receiveResult(result);
 					return result;
 				}
 				tryCount--;
@@ -356,6 +316,7 @@ class Transceiver
 //		catch (IOException e)
 			catch (IOException e)
 			{
+				tryCount--;
 			}
 			if (tryCount == 0)
 			{
@@ -382,6 +343,7 @@ class Transceiver
 			if (fiber != null)
 			{
 				fiber.unpark();
+				System.out.println("sucessfully recovered fiber");
 			}
 		}
 	}
@@ -413,45 +375,43 @@ class Transceiver
 	
 	boolean enableWebhook (String webhookURL, int tryCount) throws SuspendExecution
 	{
-		boolean isDisableOperation = false;
-		boolean success = false;
 		CloseableHttpResponse response;
-		HttpPost webHookInitRequest = null;
-		webHookInitRequest = new HttpPost(path + "setWebhook");
+		HttpPost webHookInitRequest = new HttpPost(path + "setWebhook");
 		MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create();
 		if (webhookURL == null)
 		{
 			webhookURL = "";
-			isDisableOperation = true;
 		}
 		else
 		{
 			if (!testWebhook(webhookURL + "test"))
 			{
-				System.err.println("Webhook is not responding");
-				success = false;
+				return false;
 			}
-			try
+			else
 			{
-				FiberFileChannel channel = FiberFileChannel.open(
-						FileSystems.getDefault().getPath(bot.resourcesPath + "cert\\" + "cert.pem"),
-						StandardOpenOption.READ
-				                                                );
-				ByteBuffer buffer = ByteBuffer.allocate((int) channel.size());
-				channel.read(buffer, 0);
-				entityBuilder.addBinaryBody(
-						"certificate", buffer.array(), ContentType.APPLICATION_OCTET_STREAM, "cert" + ".pem");
-			}
-			catch (Throwable e)
-			{
-				e.printStackTrace();
+				try
+				{
+					FiberFileChannel channel = FiberFileChannel.open(
+							FileSystems.getDefault().getPath(bot.resourcesPath + "cert\\" + "cert.pem"),
+							StandardOpenOption.READ
+					                                                );
+					ByteBuffer buffer = ByteBuffer.allocate((int) channel.size());
+					channel.read(buffer, 0);
+					entityBuilder.addBinaryBody(
+							"certificate", buffer.array(), ContentType.APPLICATION_OCTET_STREAM, "cert" + ".pem");
+				}
+				catch (Throwable e)
+				{
+					e.printStackTrace();
+					return false;
+				}
 			}
 			StringBody sb = new StringBody(webhookURL, ContentType.TEXT_PLAIN);
 			entityBuilder.addPart("url", sb);
 			HttpEntity entity = entityBuilder.build();
 			webHookInitRequest.setEntity(entity);
 		}
-		success = false;
 		while (tryCount-- > 0)
 		{
 			try
@@ -459,14 +419,12 @@ class Transceiver
 				response = client.execute(webHookInitRequest);
 				if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK)
 				{
-//					System.err.println(EntityUtils.toString(response.getEntity()));
 					response.close();
 					Fiber.sleep(1000);
 					continue;
 				}
 				System.out.println(EntityUtils.toString(response.getEntity()));
-				success = true;
-				break;
+				return true;
 			}
 			catch (InterruptedException e)
 			{
@@ -476,16 +434,6 @@ class Transceiver
 			{
 				
 			}
-		}
-		if (success)
-		{
-			isUsingWebhook = !isDisableOperation;
-			if (isDisableOperation && updatePuller.isInterrupted())
-			{
-				updatePuller.unpark();
-			}
-			notifySuccess();
-			return true;
 		}
 		return false;
 	}
@@ -509,6 +457,27 @@ class Transceiver
 		{
 			System.err.println(e.toString());
 			return false;
+		}
+	}
+	
+	private WebhookInfo getWebhookInfo () throws SuspendExecution
+	{
+		String getIDQuery = path + "getWebhookInfo";
+		final HttpGet req = new HttpGet(getIDQuery);
+		try
+		{
+			HttpResponse response = client.execute(req);
+			byte[] byteValue = getResponseByteArray(response);
+			return (WebhookInfo) parser.parseResult(byteValue).getResult()[0];
+		}
+		catch (IOException e)
+		{
+			return null;
+		}
+		catch (Result e)
+		{
+			System.err.println(e.toString());
+			return null;
 		}
 	}
 	
@@ -557,56 +526,97 @@ class Transceiver
 		return false;//false;
 	}
 	
-	private class UpdatePuller extends Fiber<Void>
-	{
-		@Override
-		protected Void run () throws InterruptedException, SuspendExecution
-		{
-			disableWebhook();
-			while (!shutDown)
-			{
-				if (isUsingWebhook)
-				{
-					park();
-				}
-				int updateIndex = Transceiver.this.updateIndex.get();
-				getUpdates(updateIndex);
-				sleep(750);
-			}
-			return null;
-		}
-	}
-	
-	private class KeepAliveDaemon extends Fiber<Void>
+	private class Daemon extends Fiber<Void>
 	{
 		@Override
 		protected Void run () throws SuspendExecution, InterruptedException
 		{
+			boolean isUsingWebhook = false;
+			int webhookFailure = 0;
+			long lastWebhookFailure = 0;
+			long currentTime;
+			int sleep = 1000;
+			
+			disableWebhook();
 			while (!shutDown)
 			{
-				sleep(2000);
-				boolean answer = testWebhook();
-				if (answer)
+				sleep(sleep);
+				currentTime = System.currentTimeMillis();
+				if (isUsingWebhook)
 				{
-					if (!isUsingWebhook)
+					WebhookInfo info = getWebhookInfo();
+					currentTime = System.currentTimeMillis();
+					if (info == null || info.getPending_update_count() > 0)
 					{
-						enableWebhook(bot.webhookURL);
-					}
-					notifySuccess();
-				}
-				else
-				{
-					if (isFailure)
-					{
-						if (isUsingWebhook)
+						if (webhookFailure++ > 0)
 						{
-							disableWebhook();
+							lastWebhookFailure = currentTime;
+							isUsingWebhook = !disableWebhook();
+							if (!isUsingWebhook)
+							{
+								sleep = 1000;
+								notifySuccess();
+							}
 						}
 					}
 					else
 					{
-						isFailure = true;
+						webhookFailure = 0;
+						notifySuccess();
 					}
+				}
+				else
+				{
+					try
+					{
+						int count = getUpdates(updateIndex.get());
+						if (count == -1)
+						{
+							continue;
+						}
+						currentTime = System.currentTimeMillis();
+						if (currentTime - lastWebhookFailure > 5000 * webhookFailure)
+						{
+							isUsingWebhook = enableWebhook(bot.webhookURL);
+							if (isUsingWebhook)
+							{
+								sleep = 5000;
+							}
+						}
+						else
+						{
+							sleep = (int) Math.abs(1000 - count * Math.log(count));
+						}
+					}
+					catch (Result r)
+					{
+						String message = r.getMessage();
+						if (message.contains("can't use getUpdates method while webhook is active"))
+						{
+							try
+							{
+								isUsingWebhook = !disableWebhook();
+								if (isUsingWebhook)
+								{
+									System.err.println("Can't get updates by polling and can't disbale webhook either");
+								}
+								else
+								{
+									System.err.println("Couldn't get updates by polling, so" +
+											                   " webhook is disabled");
+								}
+							}
+							catch (InterruptedException e)
+							{
+								e.printStackTrace();
+							}
+						}
+						else
+						{
+							System.err.println(message);
+						}
+					}
+					notifySuccess();
 				}
 			}
 			return null;

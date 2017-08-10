@@ -10,12 +10,12 @@ import java.util.HashMap;
 /**
  * Created by HellScre4m on 1/25/2017.
  */
-public class FlowController implements EventHandler
+public class TimedFlowController implements EventHandler
 {
 	private HashMap<Long, Long> map;
 	private ReentrantReadWriteLock lock;
 	
-	public FlowController ()
+	public TimedFlowController ()
 	{
 		map = new HashMap<>();
 		lock = new ReentrantReadWriteLock();

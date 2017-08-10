@@ -15,6 +15,7 @@ public final class Keyboards
 	public static final ReplyKeyboardMarkup CONFIRM;
 	public static final ReplyKeyboardMarkup POST_CONFIRM_ORDER;
 	public static final ReplyKeyboardMarkup TRACK_CHOOSE;
+	public static final ReplyKeyboardMarkup CHANNEL_CONFIRM_JOIN;
 //	public static final ReplyKeyboardMarkup TRACK_NEXT;
 	
 	static
@@ -26,15 +27,21 @@ public final class Keyboards
 		GET_PHONE.setKeyboard(buttons);
 		
 		MAIN_MENU = new ReplyKeyboardMarkup();
-		buttons = new KeyboardButton[2][4];
-		buttons[0][3] = new KeyboardButton().setText(Messages.CHANNEL_REGISTER);
+		buttons = new KeyboardButton[3][];
+		buttons[0] = new KeyboardButton[3];
 		buttons[0][2] = new KeyboardButton().setText(Messages.POST_VIEW);
-		buttons[0][0] = new KeyboardButton().setText(Messages.POST_ORDER);
-		buttons[0][1] = new KeyboardButton().setText(Messages.CHANNEL_ORDER);
-		buttons[1][3] = new KeyboardButton().setText(Messages.TRACK);
-		buttons[1][2] = new KeyboardButton().setText(Messages.REFERRAL_LINK);
-		buttons[1][1] = new KeyboardButton().setText(Messages.CONTACT_US);
-		buttons[1][0] = new KeyboardButton().setText(Messages.OUR_CHANNEL);
+		buttons[0][1] = new KeyboardButton().setText(Messages.POST_ORDER);
+		buttons[0][0] = new KeyboardButton().setText(Messages.TRACK);
+		
+		buttons[1] = new KeyboardButton[3];
+		buttons[1][1] = new KeyboardButton().setText(Messages.CHANNEL_ORDER);
+		buttons[1][2] = new KeyboardButton().setText(Messages.CHANNEL_JOIN_CHANNELS);
+		buttons[1][0] = new KeyboardButton().setText(Messages.REFERRAL_LINK);
+		
+		buttons[2] = new KeyboardButton[2];
+		buttons[2][1] = new KeyboardButton().setText(Messages.CONTACT_US);
+		buttons[2][0] = new KeyboardButton().setText(Messages.GUIDANCE);
+		
 		MAIN_MENU.setKeyboard(buttons);
 		MAIN_MENU.setResize_keyboard(true);
 		
@@ -65,12 +72,21 @@ public final class Keyboards
 		POST_CONFIRM_ORDER.setResize_keyboard(true);
 		//		GET_PHONE.
 		TRACK_CHOOSE = new ReplyKeyboardMarkup().setResize_keyboard(true);
-		buttons = new KeyboardButton[3][1];
-		buttons[2][0] = new KeyboardButton().setText(Messages.RETURN_TO_MAIN);
-		buttons[1][0] = new KeyboardButton().setText(Messages.TRACK_MEMBER_REQUESTS);
-		buttons[0][0] = new KeyboardButton().setText(Messages.TRACK_POST_REQUESTS);
+		buttons = new KeyboardButton[2][];
+		buttons[0] = new KeyboardButton[3];
+		buttons[0][0] = new KeyboardButton().setText(Messages.TRACK_MEMBER_REQUESTS);
+		buttons[0][1] = new KeyboardButton().setText(Messages.TRACK_POST_REQUESTS);
+		buttons[0][2] = new KeyboardButton().setText(Messages.TRACK_JOINS);
+		buttons[1] = new KeyboardButton[1];
+		buttons[1][0] = new KeyboardButton().setText(Messages.RETURN_TO_MAIN);
 		TRACK_CHOOSE.setKeyboard(buttons);
 		
+		CHANNEL_CONFIRM_JOIN = new ReplyKeyboardMarkup().setResize_keyboard(true);
+		buttons = new KeyboardButton[3][1];
+		buttons[0][0] = new KeyboardButton().setText(Messages.CHANNEL_JOIN);
+		buttons[1][0] = new KeyboardButton().setText(Messages.CHANNEL_NEXT);
+		buttons[2][0] = new KeyboardButton().setText(Messages.RETURN_TO_MAIN);
+		CHANNEL_CONFIRM_JOIN.setKeyboard(buttons);
 //		TRACK_NEXT = new ReplyKeyboardMarkup().setResize_keyboard(true);
 ////		buttons = new KeyboardButton[2][1];
 ////		buttons[0][0] = new KeyboardButton().setText(Messages.NEXT);

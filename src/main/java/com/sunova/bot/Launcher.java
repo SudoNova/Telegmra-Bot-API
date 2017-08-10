@@ -2,7 +2,8 @@ package com.sunova.bot;
 
 import co.paralleluniverse.fibers.SuspendExecution;
 import com.sunova.botframework.Bot;
-import com.sunova.modules.FlowController;
+import com.sunova.modules.LockFlowController;
+import com.sunova.modules.TimedFlowController;
 
 import java.io.IOException;
 
@@ -19,8 +20,11 @@ public class Launcher
 		String token = "309177874:AAFdSl9F6P9jZZNoMdhuAprCOXbx_pRepXs";
 		String domainAddress = "sunova.dynu.com";
 		EventProcessor processor = new EventProcessor();
+		LockFlowController lockFlowController = new LockFlowController();
+		processor.flowController = lockFlowController;
 		instance.setBotToken(token).setDomainAddress(domainAddress)
-				.setUserInterface(processor).build().getInterface().registerHandler(new FlowController());
+				.setUserInterface(processor).build().getInterface()
+				.registerHandler(new TimedFlowController()).registerHandler(lockFlowController);
 		
 	}
 }

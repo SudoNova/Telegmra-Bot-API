@@ -24,7 +24,7 @@ import java.util.ArrayList;
  */
 class WebHook
 {
-	protected static final int serverPort = 88;
+	protected static final int serverPort = 8443;
 	private static ArrayList<WebHook> repos;
 	
 	static
@@ -133,10 +133,9 @@ class WebHook
 													}
 													catch (IOException | HttpException e)
 													{
-														e.printStackTrace();
+//														e.printStackTrace();
 														break;
 													}
-													
 												}
 												try
 												{

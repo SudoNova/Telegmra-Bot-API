@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 /**
  * Created by HellScre4m on 5/4/2016.
  */
-public class Result extends Exception
+public class Result extends Exception implements TObject
 {
 	private TObject[] result;
 	private boolean ok;

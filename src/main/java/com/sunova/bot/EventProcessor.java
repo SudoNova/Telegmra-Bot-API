@@ -1,19 +1,20 @@
 package com.sunova.bot;
 
 import co.paralleluniverse.fibers.SuspendExecution;
-import co.paralleluniverse.strands.Strand;
+import com.ibm.icu.text.DateFormat;
+import com.ibm.icu.text.SimpleDateFormat;
+import com.ibm.icu.util.Calendar;
+import com.ibm.icu.util.ULocale;
 import com.mongodb.MongoException;
-import com.sunova.botframework.Logger;
 import com.sunova.botframework.UserInterface;
+import com.sunova.modules.LockFlowController;
 import com.sunova.prebuilt.Keyboards;
 import com.sunova.prebuilt.Messages;
 import com.sunova.prebuilt.States;
 import org.bson.Document;
 import org.telegram.objects.*;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Scanner;
 
 /**
@@ -23,20 +24,26 @@ public class EventProcessor extends UserInterface
 {
 	static final int referralReward = 40;
 	User botUser;
+	LockFlowController flowController;
 	private MongoDBDriver dbDriver;
 	private ViewEntity viewEntity;
 	private MemberEntity memberEntity;
+	static ULocale locale = new ULocale("fa_IR@calendar=persian");
+	static Calendar cal = Calendar.getInstance(locale);
+	static DateFormat df = SimpleDateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM, locale);
 	
 	public EventProcessor ()
 	{
 		dbDriver = new MongoDBDriver();
-		viewEntity = new ViewEntity(dbDriver);
-		memberEntity = new MemberEntity(dbDriver);
+		viewEntity = new ViewEntity(dbDriver, this);
+		memberEntity = new MemberEntity(dbDriver, this);
 	}
 	
 	public Message onMessage (Message message) throws SuspendExecution
 	{
 		User from = message.getFrom();
+		int id = from.getId();
+		flowController.lock(id);
 		try
 		{
 			Document doc = getUser(message, from);
@@ -51,29 +58,32 @@ public class EventProcessor extends UserInterface
 				case States.MAIN_MENU:
 					processMainMenu(message, from, doc);
 					break;
-				case States.CONFIRM_VIEW_POST:
-					viewEntity.confirmViewPost(message, doc, this);
+				case States.POST_CONFIRM_VIEW:
+					viewEntity.confirmViewPost(message, doc);
 					break;
 				case States.POST_ENTER:
-					viewEntity.getPost(message, from, doc, bot, this);
+					viewEntity.getPost(message, from, doc, bot);
 					break;
 				case States.CHANNEL_ENTER:
-					memberEntity.enterChannel(message, doc, this);
+					memberEntity.enterChannel(message, doc);
 					break;
 				case States.WAITING_FOR_AMOUNT:
 					getAmount(message, from, doc);
 					break;
-				case States.CONFIRM_VIEW_ORDER:
+				case States.POST_CONFIRM_ORDER:
 					confirmOrder(message, from, doc);
 					break;
 				case States.TRACK_CHOOSE:
 					track(message, from, doc);
 					break;
 				case States.TRACK_POSTS:
-					viewEntity.trackRequests(message, doc, this);
+					viewEntity.trackRequests(message, doc);
 					break;
 				case States.CHANNEL_DESCRIBE:
-					memberEntity.getDescription(message, doc, this);
+					memberEntity.getDescription(message, doc);
+					break;
+				case States.CHANNEL_CONFIRM_JOIN:
+					memberEntity.confirmJoin(message, doc);
 					break;
 
 //				default:
@@ -86,22 +96,14 @@ public class EventProcessor extends UserInterface
 		}
 		catch (Result result)
 		{
-			Logger.ERROR(result);
-			Logger.DEBUG(Arrays.toString(Strand.currentStrand().getStackTrace()));
-			Logger.TRACE(from, message);
-			try
-			{
-				Logger.dumpAndSend(bot);
-			}
-			catch (IOException | Result e)
-			{
-				e.printStackTrace();
-			}
+			
 		}
-		catch (Throwable throwable)
+		catch (MongoException throwable)
 		{
+			throwable.fillInStackTrace();
 			throwable.printStackTrace();
 		}
+		flowController.unlock(id);
 		return null;
 	}
 	
@@ -114,11 +116,15 @@ public class EventProcessor extends UserInterface
 		String choice = message.getText();
 		if (choice.equals(Messages.TRACK_POST_REQUESTS))
 		{
-			viewEntity.trackRequests(message, doc, this);
+			viewEntity.trackRequests(message, doc);
 		}
 		else if (choice.equals(Messages.TRACK_MEMBER_REQUESTS))
 		{
-//						memberEntity.trackRequests(from, message, doc, botInterface, this, true);
+			memberEntity.trackRequests(message, doc);
+		}
+		else if (choice.equals(Messages.TRACK_JOINS))
+		{
+			memberEntity.trackJoins(message);
 		}
 		else if (choice.equals(Messages.RETURN_TO_MAIN) || choice.startsWith("/start"))
 		{
@@ -233,7 +239,7 @@ public class EventProcessor extends UserInterface
 				int previous_state = doc.getInteger("previous_state");
 				if (previous_state == States.POST_ENTER)
 				{
-					viewEntity.confirmOrder(from, doc, botInterface, this);
+					viewEntity.confirmOrder(from, doc, botInterface);
 				}
 				else if (previous_state == States.CHANNEL_ENTER)
 				{
@@ -286,12 +292,19 @@ public class EventProcessor extends UserInterface
 				sendStateMessage(States.MAIN_MENU, doc, from.getId());
 				goToState(from.getId(), States.MAIN_MENU);
 			}
-			sendStateMessage(States.CHANNEL_ENTER, doc, from.getId());
-			goToState(from.getId(), States.CHANNEL_ENTER);
+			else
+			{
+				sendStateMessage(States.CHANNEL_ENTER, doc, from.getId());
+				goToState(from.getId(), States.CHANNEL_ENTER);
+			}
+		}
+		else if (choice.equals(Messages.CHANNEL_JOIN_CHANNELS))
+		{
+			memberEntity.goToNextChannel(doc);
 		}
 		else if (choice.equals(Messages.POST_VIEW))
 		{
-			viewEntity.goToNextPost(doc, this);
+			viewEntity.goToNextPost(doc, true);
 		}
 		else if (choice.equals(Messages.TRACK))
 		{
@@ -316,7 +329,14 @@ public class EventProcessor extends UserInterface
 		}
 		else if (choice.equals(Messages.CONTACT_US))
 		{
-			message.setText("برای ارتباط با مدیر روبات به @ViewMemberSupport پیام دهید.");
+			message.setText("ارتباط با مدیر ربات  \uD83D\uDC48 @ViewMemberSupport\n" +
+					                "کانال ربات \uD83D\uDC48 @ViewMemberChannel\n" +
+					                "\uD83D\uDCE3 با گزارش هر ایراد ربات ۱۰۰ سکه هدیه بگیرید.");
+			botInterface.sendMessage(message);
+		}
+		else if (choice.equals(Messages.GUIDANCE))
+		{
+			message.setText(Messages.TUTORIALS);
 			botInterface.sendMessage(message);
 		}
 		else
@@ -410,7 +430,6 @@ public class EventProcessor extends UserInterface
 				}
 				catch (Result r)
 				{
-					Logger.WARNING(r);
 				}
 			}
 			botInterface.sendMessage(message);

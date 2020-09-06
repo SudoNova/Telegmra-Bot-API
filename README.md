@@ -1,4 +1,9 @@
 # Telegram-Bot-API
 
-This is an archived project for interacting with Telegram's Bot API, and possibly Core API, to build automated bots upon it, in a modular based design.
-I no longer maintain this repository and it's here for referencing reasons.
+I'm going to maintain this project for learning purposes only.
+
+Current goals:
+
+- Add support for annotation.
+- Replace project Loom lightweight fibers with current Quasar implementation.
+- Add unit tests.
